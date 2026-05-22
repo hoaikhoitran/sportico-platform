@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Org.BouncyCastle.Utilities;
 using SporticoApp.Application.DTOs.Auth;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Core.Entities;
@@ -22,6 +23,18 @@ namespace SporticoApp.Infrastructure.Services
         }
         public TokenResult GenerateAccessToken(User user)
         {
+            var secretKey = _config["JWT:SecretKey"];
+            var issuer = _config["JWT:Issuer"];
+            var audience = _config["JWT:Audience"];
+
+            if (string.IsNullOrWhiteSpace(secretKey) ||
+                string.IsNullOrWhiteSpace(issuer) ||
+                string.IsNullOrWhiteSpace(audience))
+            {
+                throw new InvalidOperationException(
+                    "JWT configuration is missing required values.");
+            }
+
             var claims = new List<Claim> 
             { 
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -31,12 +44,22 @@ namespace SporticoApp.Infrastructure.Services
             {
                 claims.Add(new Claim(ClaimTypes.Role, role.Role.Name));
             }
-            var expiresAt = DateTime.UtcNow.AddHours(1);
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:SecretKey"]));
+            
+            var expiresInMinutes = _config.GetValue<int>(
+                "JWT:AccessTokenExpirationMinutes");
+            if (expiresInMinutes <= 0)
+            {
+                throw new InvalidOperationException(
+                    "JWT:AccessTokenExpirationMinutes must be greater than zero.");
+            }
+            var expiresAt = DateTime.UtcNow.AddMinutes(expiresInMinutes);
+            
+            var key = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var token = new JwtSecurityToken(
-                issuer: _config["Jwt:Issuer"],
-                audience: _config["Jwt:Audience"],
+                issuer: issuer,
+                audience: audience,
                 claims: claims,
                 expires: expiresAt,
                 signingCredentials: creds

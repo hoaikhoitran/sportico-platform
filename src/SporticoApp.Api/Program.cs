@@ -1,5 +1,7 @@
 
 using DotNetEnv;
+using SporticoApp.Application;
+using SporticoApp.Infrastructure;
 using System.IO;
 
 namespace SporticoApp.Api
@@ -18,6 +20,9 @@ namespace SporticoApp.Api
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+
+            builder.Services.AddApplicationDI();
+            builder.Services.AddInfrastructureDI(builder.Configuration);
 
             var app = builder.Build();
 

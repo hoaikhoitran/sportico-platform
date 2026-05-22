@@ -8,7 +8,8 @@ namespace SporticoApp.Application.DTOs.Auth
 {
     public class LoginResponse
     {
-        public string AccessToken { get; set; } = default;
-        public string RefreshToken { get; set; } = default;
+        public string AccessToken { get; set; } = string.Empty;
+        public string RefreshToken { get; set; } = string.Empty;
+        public DateTime ExpiresAt { get; set; } = default;
     }
 }

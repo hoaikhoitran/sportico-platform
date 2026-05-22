@@ -1,9 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using SporticoApp.Application.Interfaces.Services;
+using SporticoApp.Application.Services;
 
 namespace SporticoApp.Application
 {
@@ -11,6 +8,7 @@ namespace SporticoApp.Application
     {
         public static IServiceCollection AddApplicationDI(this IServiceCollection services)
         {
+            services.AddScoped<IAuthService, AuthService>();
             return services;
         }
     }

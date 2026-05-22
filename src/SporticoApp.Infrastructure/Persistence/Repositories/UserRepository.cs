@@ -27,5 +27,18 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
         }
+        public async Task<User?> GetByVerificationTokenAsync(
+            string token)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(
+                    x => x.EmailVerificationToken == token);
+        }
+
+        public async Task UpdateAsync(User user)
+        {
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+        }
     }
 }

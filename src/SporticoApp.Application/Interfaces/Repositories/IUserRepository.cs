@@ -11,5 +11,8 @@ namespace SporticoApp.Application.Interfaces.Repositories
     {
         Task<User?> GetByEmailAsync(string email);
         Task AddAsync(User user);
+
+        Task<User?> GetByVerificationTokenAsync(string token);
+        Task UpdateAsync(User user);
     }
 }

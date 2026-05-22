@@ -10,7 +10,9 @@ namespace SporticoApp.Application.Interfaces.Services
 {
     public interface IAuthService
     {
-        Task<LoginResponse> LoginAsync(LoginRequest request);
+        Task<Result<LoginResponse>> LoginAsync(LoginRequest request);
         Task<Result> RegisterAsync(RegisterRequest request);
+        Task<Result> VerifyEmailAsync(string token);
+        Task<Result<RefreshTokenResponse>> RefreshTokenAsync(RefreshTokenRequest request);
     }
 }
