@@ -18,15 +18,25 @@ namespace SporticoApp.Shared.Responses
 
     public class Result<T>
     {
-        public bool IsSuccess { get; set; }
-        public string? Message { get; set; }
-        public T? Data { get; set; }
+        public bool IsSuccess { get; init; }
+
+        public T? Data { get; init; }
+
+        public Error? Error { get; init; }
 
         public static Result<T> Success(T data)
-            => new Result<T> { IsSuccess = true, Data = data };
+            => new()
+            {
+                IsSuccess = true,
+                Data = data
+            };
 
-        public static Result<T> Fail(string message)
-            => new Result<T> { IsSuccess = false, Message = message };
+        public static Result<T> Failure(Error error)
+            => new()
+            {
+                IsSuccess = false,
+                Error = error
+            };
     }
 
 }

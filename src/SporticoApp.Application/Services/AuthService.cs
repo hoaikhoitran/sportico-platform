@@ -4,6 +4,7 @@ using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Core.Entities;
 using SporticoApp.Core.Enums;
 using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Exceptions;
 using SporticoApp.Shared.Helpers;
 using SporticoApp.Shared.Responses;
 using System;
@@ -47,13 +48,11 @@ namespace SporticoApp.Application.Services
                 request.Password,
                 user.PasswordHash))
             {
-                return Result<LoginResponse>
-                    .Fail("Invalid email or password");
+                throw new UnauthorizedException(ErrorCodes.InvalidCredentials, "Invalid Email or Password");
             }
             else if(user.Status != UserStatus.active.ToString())
             {
-                return Result<LoginResponse>
-                    .Fail("Account is not active, check your email to active your account.");
+                throw new UnauthorizedException(ErrorCodes.AccountNotActive, "Account is not active, check your email to active your account.");
             }
 
             var accessToken = _jwtService.GenerateAccessToken(user);
@@ -80,7 +79,7 @@ namespace SporticoApp.Application.Services
             var existingUser = await _userRepo.GetByEmailAsync(normalizedEmail);
             if (existingUser != null)
             {
-                return Result.Fail("Email is already registered");
+                throw new ConflictException(ErrorCodes.EmailAlreadyExists, "Email is already registered");
             }
             var verifyToken = Guid.NewGuid().ToString();
 
@@ -116,7 +115,9 @@ namespace SporticoApp.Application.Services
             var leanerRole = await _roleRepo.GetByNameAsync(RoleConstants.Learner);
             if (leanerRole == null)
             {
-                return Result.Fail("Learner role not found");
+                throw new NotFoundException(
+                    ErrorCodes.RoleNotFound,
+                    "Learner role not found");
             }
 
             var userRole = new UserRole()
@@ -133,13 +134,13 @@ namespace SporticoApp.Application.Services
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                return Result.Fail("Invalid verification token");
+                throw new ValidationException(ErrorCodes.InvalidVerificationToken, "Verification token is required");
             }
 
             var user = await _userRepo.GetByVerificationTokenAsync(token);
             if (user == null)
             {
-                return Result.Fail("Invalid verification token");
+                throw new ValidationException(ErrorCodes.InvalidVerificationToken, "Invalid verification token");
             }
 
             user.Status = UserStatus.active.ToString();
@@ -158,13 +159,13 @@ namespace SporticoApp.Application.Services
             var user = await _userRepo.GetByEmailAsync(normalizedEmail);
             if (user == null || user.RefreshToken != request.RefreshToken)
             {
-                return Result<RefreshTokenResponse>.Fail("Invalid refresh token");
+                throw new UnauthorizedException(ErrorCodes.InvalidRefreshToken, "Invalid refresh token");
             }
 
             if (user.RefreshTokenExpiresAt == null ||
                 user.RefreshTokenExpiresAt <= DateTime.UtcNow)
             {
-                return Result<RefreshTokenResponse>.Fail("Refresh token expired");
+                throw new UnauthorizedException(ErrorCodes.RefreshTokenExpired, "Refresh token expired");
             }
 
             var accessToken = _jwtService.GenerateAccessToken(user);

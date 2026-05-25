@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SporticoApp.Application.DTOs.Auth;
 using SporticoApp.Application.Interfaces.Services;
+using SporticoApp.Shared.Responses;
 
 namespace SporticoApp.Api.Controllers
 {
@@ -16,14 +17,11 @@ namespace SporticoApp.Api.Controllers
         }
 
         [HttpPost("login")]
+        [ProducesResponseType(typeof(Result<LoginResponse>), 200)]
+        [ProducesResponseType(typeof(Result<object>), 401)]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             var result = await _authService.LoginAsync(request);
-            if (!result.IsSuccess)
-            {
-                return BadRequest(result);
-            }
-
             return Ok(result);
         }
 
@@ -31,11 +29,6 @@ namespace SporticoApp.Api.Controllers
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             var result = await _authService.RegisterAsync(request);
-            if (!result.IsSuccess)
-            {
-                return BadRequest(result);
-            }
-
             return Ok(result);
         }
 
@@ -43,11 +36,6 @@ namespace SporticoApp.Api.Controllers
         public async Task<IActionResult> VerifyEmail([FromQuery] string token)
         {
             var result = await _authService.VerifyEmailAsync(token);
-            if (!result.IsSuccess)
-            {
-                return BadRequest(result);
-            }
-
             return Ok(result);
         }
 
@@ -55,11 +43,6 @@ namespace SporticoApp.Api.Controllers
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
         {
             var result = await _authService.RefreshTokenAsync(request);
-            if (!result.IsSuccess)
-            {
-                return BadRequest(result);
-            }
-
             return Ok(result);
         }
     }

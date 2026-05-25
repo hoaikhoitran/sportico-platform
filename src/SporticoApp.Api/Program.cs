@@ -1,8 +1,11 @@
 
 using DotNetEnv;
+using SporticoApp.Api.Middlewares;
 using SporticoApp.Application;
 using SporticoApp.Infrastructure;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SporticoApp.Api
 {
@@ -16,7 +19,16 @@ namespace SporticoApp.Api
 
             // Add services to the container.
 
-            builder.Services.AddControllers();
+            builder.Services
+            .AddControllers()
+            .AddJsonOptions(options =>
+            {
+                options.JsonSerializerOptions.PropertyNamingPolicy =
+                    JsonNamingPolicy.CamelCase;
+
+                options.JsonSerializerOptions.Converters.Add(
+                    new JsonStringEnumConverter());
+            });
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
@@ -31,12 +43,13 @@ namespace SporticoApp.Api
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
-            }
+            }   
 
             app.UseHttpsRedirection();
 
             app.UseAuthorization();
 
+            app.UseMiddleware<ExceptionMiddleware>(); 
 
             app.MapControllers();
 
