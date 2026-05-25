@@ -19,10 +19,10 @@ jobs:
 
       - name: Restore
         run: dotnet restore SporticoApp.Api/SporticoApp.Api.csproj
-
+      
       - name: Build
         run: dotnet build SporticoApp.Api/SporticoApp.Api.csproj -c Release --no-restore
-
+      
       - name: Publish
         run: dotnet publish SporticoApp.Api/SporticoApp.Api.csproj -c Release -o myapp --no-build
 
