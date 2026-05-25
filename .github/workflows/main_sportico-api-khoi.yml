@@ -18,13 +18,13 @@ jobs:
           dotnet-version: '8.x'
 
       - name: Restore
-        run: dotnet restore SporticoApp.Api/SporticoApp.Api.csproj
-
+        run: dotnet restore SporticoApp.Api.sln
+      
       - name: Build
-        run: dotnet build SporticoApp.Api/SporticoApp.Api.csproj -c Release --no-restore
-
+        run: dotnet build SporticoApp.Api.sln -c Release --no-restore
+      
       - name: Publish
-        run: dotnet publish SporticoApp.Api/SporticoApp.Api.csproj -c Release -o myapp --no-build
+        run: dotnet publish SporticoApp.Api.sln -c Release -o myapp --no-build
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
