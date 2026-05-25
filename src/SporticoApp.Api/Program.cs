@@ -1,4 +1,4 @@
-
+﻿
 using DotNetEnv;
 using SporticoApp.Api.Middlewares;
 using SporticoApp.Application;
@@ -39,11 +39,23 @@ namespace SporticoApp.Api
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
+            // Đưa ra ngoài để Production (Azure) vẫn chạy được
+            app.UseSwagger();
+            app.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Sportico API V1");
+                c.RoutePrefix = string.Empty; 
+            });
+
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
-                app.UseSwaggerUI();
-            }   
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Sportico API V1");
+                    c.RoutePrefix = string.Empty; 
+                });
+            }
 
             app.UseHttpsRedirection();
 
