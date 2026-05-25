@@ -12,11 +12,13 @@ namespace SporticoApp.Shared.Exceptions
     {
         public ValidationException(
             string code,
-            string message)
+            string message,
+            List<string>? details = null)
             : base(
                 code,
                 message,
-                ErrorType.Validation)
+                ErrorType.Validation,
+                details)
         {
         }
     }

@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using SporticoApp.Shared.Constants;
 using SporticoApp.Shared.Exceptions;
 using SporticoApp.Shared.Responses;
 using SporticoApp.Shared.Enums;
@@ -66,6 +67,7 @@ public class ExceptionMiddleware
         }
         catch (Exception)
         {
+            context.Response.ContentType = "application/json";
             context.Response.StatusCode = 500;
 
             var response = new Result<object>
@@ -73,7 +75,7 @@ public class ExceptionMiddleware
                 IsSuccess = false,
                 Error = new Error
                 {
-                    Code = "INTERNAL_SERVER_ERROR",
+                    Code = ErrorCodes.InternalServerError,
                     Message = "Something went wrong",
                     Type = ErrorType.Failure
                 }

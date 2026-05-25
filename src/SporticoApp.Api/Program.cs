@@ -3,9 +3,15 @@ using DotNetEnv;
 using SporticoApp.Api.Middlewares;
 using SporticoApp.Application;
 using SporticoApp.Infrastructure;
-using System.IO;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc;
+using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Enums;
+using SporticoApp.Shared.Responses;
 
 namespace SporticoApp.Api
 {
@@ -29,12 +35,73 @@ namespace SporticoApp.Api
                 options.JsonSerializerOptions.Converters.Add(
                     new JsonStringEnumConverter());
             });
+            builder.Services.Configure<ApiBehaviorOptions>(options =>
+            {
+                options.InvalidModelStateResponseFactory = context =>
+                {
+                    var details = context.ModelState
+                        .Where(x => x.Value?.Errors.Count > 0)
+                        .SelectMany(x => x.Value!.Errors)
+                        .Select(x => x.ErrorMessage)
+                        .ToList();
+
+                    var response = new Result<object>
+                    {
+                        IsSuccess = false,
+                        Error = new Error
+                        {
+                            Code = ErrorCodes.ValidationError,
+                            Message = "Invalid request data",
+                            Type = ErrorType.Validation,
+                            Details = details
+                        }
+                    };
+
+                    return new BadRequestObjectResult(response);
+                };
+            });
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
             builder.Services.AddApplicationDI();
             builder.Services.AddInfrastructureDI(builder.Configuration);
+
+            var jwtSecretKey = builder.Configuration["JWT:SecretKey"];
+            var jwtIssuer = builder.Configuration["JWT:Issuer"];
+            var jwtAudience = builder.Configuration["JWT:Audience"];
+
+            if (string.IsNullOrWhiteSpace(jwtSecretKey) ||
+                string.IsNullOrWhiteSpace(jwtIssuer) ||
+                string.IsNullOrWhiteSpace(jwtAudience))
+            {
+                throw new InvalidOperationException(
+                    "JWT configuration is missing required values.");
+            }
+
+            builder.Services
+                .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidIssuer = jwtIssuer,
+
+                        ValidateAudience = true,
+                        ValidAudience = jwtAudience,
+
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey = new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes(jwtSecretKey)),
+
+                        ValidateLifetime = true,
+
+                        ClockSkew = TimeSpan.Zero
+                    };
+                });
+
+            builder.Services.AddAuthorization();
 
             var app = builder.Build();
 
@@ -57,12 +124,13 @@ namespace SporticoApp.Api
                     c.RoutePrefix = string.Empty; 
                 });
             }
-
             app.UseHttpsRedirection();
 
-            app.UseAuthorization();
+            app.UseMiddleware<ExceptionMiddleware>();
 
-            app.UseMiddleware<ExceptionMiddleware>(); 
+            app.UseAuthentication();
+
+            app.UseAuthorization();
 
             app.MapControllers();
 

@@ -46,6 +46,27 @@ namespace SporticoApp.Shared.Constants
 
         public const string RoleNotFound =
             "COMMON_ROLE_NOT_FOUND";
+        // Coach
+        public const string CoachProfileAlreadyExists =
+            "COACH_PROFILE_ALREADY_EXISTS";
 
+        public const string CoachProfileNotFound =
+            "COACH_PROFILE_NOT_FOUND";
+
+        // Sport
+        public const string InvalidSport =
+            "SPORT_INVALID";
+
+        public const string SportNameAlreadyExists =
+            "SPORT_NAME_ALREADY_EXISTS";
+
+        public const string SportSlugAlreadyExists =
+            "SPORT_SLUG_ALREADY_EXISTS";
+
+        public const string SportNotFound =
+            "SPORT_NOT_FOUND";
+
+        public const string InvalidSportSlug =
+            "SPORT_INVALID_SLUG";
     }
 }

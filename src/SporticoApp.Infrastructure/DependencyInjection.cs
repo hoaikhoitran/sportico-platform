@@ -26,10 +26,13 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IUserRoleRepository, UserRoleRepository>();
+            services.AddScoped<ICoachRepository, CoachRepository>();
+            services.AddScoped<ISportRepository, SportRepository>();
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             services.AddScoped<IEmailService, EmailService>();
+            services.AddSingleton<ISlugGenerator, SlugGenerator>();
 
             return services;
         }

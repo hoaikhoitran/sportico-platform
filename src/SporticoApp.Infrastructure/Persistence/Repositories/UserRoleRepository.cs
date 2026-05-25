@@ -1,6 +1,6 @@
 ﻿using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
-using SporticoApp.Infrastructure.Persistence.Context;
+using SporticoApp.Infrastructure.Persistence;
 using System;
 using System.Collections.Generic;
 using System.Linq;

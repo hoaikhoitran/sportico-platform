@@ -7,6 +7,8 @@ using SporticoApp.Shared.Constants;
 using SporticoApp.Shared.Exceptions;
 using SporticoApp.Shared.Helpers;
 using SporticoApp.Shared.Responses;
+using Microsoft.Extensions.Configuration;
+using FluentValidation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +17,8 @@ using System.Threading.Tasks;
 
 namespace SporticoApp.Application.Services
 {
+    using ValidationException = SporticoApp.Shared.Exceptions.ValidationException;
+
     public class AuthService : IAuthService
     {
         private readonly IUserRepository _userRepo;
@@ -23,13 +27,17 @@ namespace SporticoApp.Application.Services
         private readonly IJwtService _jwtService;
         private readonly IRefreshTokenService _refreshTokenService;
         private readonly IEmailService _emailService;
+        private readonly IConfiguration _configuration;
+        private readonly IValidator<RefreshTokenRequest> _refreshTokenValidator;
         public AuthService(
             IUserRepository userRepo,
             IRoleRepository roleRepo,
             IUserRoleRepository userRoleRepo,
             IJwtService jwtService,
             IRefreshTokenService refreshTokenService,
-            IEmailService emailService)
+            IEmailService emailService,
+            IConfiguration configuration,
+            IValidator<RefreshTokenRequest> refreshTokenValidator)
         {
             _userRepo = userRepo;
             _roleRepo = roleRepo;
@@ -37,13 +45,15 @@ namespace SporticoApp.Application.Services
             _jwtService = jwtService;
             _refreshTokenService = refreshTokenService;
             _emailService = emailService;
+            _configuration = configuration;
+            _refreshTokenValidator = refreshTokenValidator;
         }
 
         public async Task<Result<LoginResponse>> LoginAsync(
                     LoginRequest request)
         {
             var normalizedEmail = request.Email.Trim().ToLower();
-            var user = await _userRepo.GetByEmailAsync(normalizedEmail);
+            var user = await _userRepo.GetByEmailWithRolesAsync(normalizedEmail);
             if (user == null || !PasswordHelper.VerifyPassword(
                 request.Password,
                 user.PasswordHash))
@@ -97,8 +107,15 @@ namespace SporticoApp.Application.Services
 
             await _userRepo.AddAsync(user);
 
+            var apiBaseUrl = _configuration["AppSettings:ApiBaseUrl"];
+
+            if (string.IsNullOrWhiteSpace(apiBaseUrl))
+            {
+                throw new InvalidOperationException("AppSettings:ApiBaseUrl is missing.");
+            }
+
             var verifyLink =
-                $"https://localhost:7097/api/auth/verify-email?token={verifyToken}";
+                $"{apiBaseUrl.TrimEnd('/')}/api/auth/verify-email?token={verifyToken}";
             await _emailService.SendEmailAsync(
             user.Email,
                 "Verify your Sportico account",
@@ -155,11 +172,31 @@ namespace SporticoApp.Application.Services
         public async Task<Result<RefreshTokenResponse>> RefreshTokenAsync(
             RefreshTokenRequest request)
         {
+            var validationResult = await _refreshTokenValidator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var details = validationResult.Errors
+                    .Select(x => x.ErrorMessage)
+                    .ToList();
+
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Invalid request data",
+                    details);
+            }
+
             var normalizedEmail = request.Email.Trim().ToLower();
-            var user = await _userRepo.GetByEmailAsync(normalizedEmail);
+            var user = await _userRepo.GetByEmailWithRolesAsync(normalizedEmail);
             if (user == null || user.RefreshToken != request.RefreshToken)
             {
                 throw new UnauthorizedException(ErrorCodes.InvalidRefreshToken, "Invalid refresh token");
+            }
+
+            if (user.Status != UserStatus.active.ToString())
+            {
+                throw new UnauthorizedException(
+                    ErrorCodes.AccountNotActive,
+                    "Account is not active, check your email to active your account.");
             }
 
             if (user.RefreshTokenExpiresAt == null ||
