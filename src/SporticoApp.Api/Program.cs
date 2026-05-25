@@ -49,6 +49,7 @@ namespace SporticoApp.Api
 
             if (app.Environment.IsDevelopment())
             {
+                app.UseHttpsRedirection();
                 app.UseSwagger();
                 app.UseSwaggerUI(c =>
                 {
