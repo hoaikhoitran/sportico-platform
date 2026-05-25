@@ -1,34 +1,34 @@
 # Sportico Platform — Backend API
 
-Sportico là nền tảng kết nối giữa **Coach (huấn luyện viên thể thao)** và **Learner (người học)**, hỗ trợ đăng bài, theo dõi, nhắn tin, đặt gói tập, đánh giá và thanh toán.
+Sportico is a platform that connects **Coaches (sports trainers)** with **Learners**, supporting posts, follows, messaging, training packages, reviews, and payments.
 
-Repo này chứa toàn bộ **Backend API** được xây dựng bằng **ASP.NET Core 8 (Web API)** theo kiến trúc **Clean Architecture**, sử dụng **PostgreSQL** làm cơ sở dữ liệu chính và được triển khai (deploy) trên **Azure App Service** thông qua **GitHub Actions CI/CD**.
-
----
-
-## Mục lục
-
-1. [Kiến trúc tổng quan — Clean Architecture](#1-kiến-trúc-tổng-quan--clean-architecture)
-2. [Cấu trúc thư mục](#2-cấu-trúc-thư-mục)
-3. [Request Pipeline (vòng đời của một request)](#3-request-pipeline-vòng-đời-của-một-request)
-4. [Read vs Write — Quy ước `AsNoTracking`](#4-read-vs-write--quy-ước-asnotracking)
-5. [Pagination — Phân trang chuẩn](#5-pagination--phân-trang-chuẩn)
-6. [Cơ sở dữ liệu — PostgreSQL trên Render](#6-cơ-sở-dữ-liệu--postgresql-trên-render)
-7. [CI/CD — Deploy Azure App Service (Student Account)](#7-cicd--deploy-azure-app-service-student-account)
-8. [Chạy dự án ở local](#8-chạy-dự-án-ở-local)
-9. [Quy ước code & đóng góp](#9-quy-ước-code--đóng-góp)
+This repository contains the entire **Backend API** built with **ASP.NET Core 8 (Web API)** following **Clean Architecture**, using **PostgreSQL** as the primary database and deployed to **Azure App Service** via **GitHub Actions CI/CD**.
 
 ---
 
-## 1. Kiến trúc tổng quan — Clean Architecture
+## Table of Contents
 
-Dự án được tổ chức theo **Clean Architecture**, mục tiêu là tách biệt **business logic** ra khỏi **framework, database và các dịch vụ bên ngoài**. Nhờ đó:
+1. [Architecture Overview — Clean Architecture](#1-architecture-overview--clean-architecture)
+2. [Folder Structure](#2-folder-structure)
+3. [Request Pipeline (the life of a request)](#3-request-pipeline-the-life-of-a-request)
+4. [Read vs Write — The `AsNoTracking` Convention](#4-read-vs-write--the-asnotracking-convention)
+5. [Pagination — Standard Paging](#5-pagination--standard-paging)
+6. [Database — PostgreSQL on Render](#6-database--postgresql-on-render)
+7. [CI/CD — Deploying to Azure App Service (Student Account)](#7-cicd--deploying-to-azure-app-service-student-account)
+8. [Running the Project Locally](#8-running-the-project-locally)
+9. [Code Conventions & Contributing](#9-code-conventions--contributing)
 
-- Tầng trong (Core, Application) **không phụ thuộc** vào tầng ngoài (Infrastructure, Api).
-- Có thể thay PostgreSQL bằng SQL Server, thay SMTP bằng SendGrid… mà **không phải sửa logic nghiệp vụ**.
-- Dễ viết unit test cho Application vì không cần dựng database.
+---
 
-### Sơ đồ phụ thuộc
+## 1. Architecture Overview — Clean Architecture
+
+The project is organized following **Clean Architecture**. The goal is to isolate **business logic** from **frameworks, databases, and external services**. As a result:
+
+- Inner layers (Core, Application) **do not depend on** outer layers (Infrastructure, Api).
+- We can swap PostgreSQL for SQL Server, or SMTP for SendGrid, **without touching business logic**.
+- Unit tests for the Application layer are easy to write because no real database is required.
+
+### Dependency Diagram
 
 ```
             +-------------------+
@@ -51,19 +51,19 @@ Dự án được tổ chức theo **Clean Architecture**, mục tiêu là tách
             +-------------------+
 ```
 
-> Quy tắc bất biến: **mũi tên luôn hướng vào trong**. Core không biết Application, Application không biết Infrastructure.
+> The invariant: **arrows always point inward**. Core knows nothing about Application; Application knows nothing about Infrastructure.
 
-### Vai trò từng tầng
+### Responsibilities of Each Layer
 
-| Tầng | Trách nhiệm | Ví dụ |
+| Layer | Responsibility | Examples |
 |---|---|---|
-| **SporticoApp.Core** | Entities, Enums, các quy tắc nghiệp vụ thuần | `User`, `Post`, `CoachProfile`, `Role` |
-| **SporticoApp.Application** | Use cases, định nghĩa Interfaces (Repository, Service), DTOs, Validation | `AuthService`, `IUserRepository`, `LoginRequest` |
-| **SporticoApp.Infrastructure** | Cài đặt các interface ở tầng Application: EF Core, JWT, Email, Repository | `AppDbContext`, `UserRepository`, `JwtService`, `EmailService` |
-| **SporticoApp.Api** | Cổng vào HTTP: Controllers, Middlewares, cấu hình Swagger, DI | `AuthController`, `ExceptionMiddleware`, `Program.cs` |
-| **SporticoApp.Shared** | Thành phần dùng chung xuyên tầng | `Result<T>`, `AppException`, `ErrorType`, `PagedResult<T>` |
+| **SporticoApp.Core** | Entities, Enums, pure domain rules | `User`, `Post`, `CoachProfile`, `Role` |
+| **SporticoApp.Application** | Use cases, interface definitions (Repository, Service), DTOs, validation | `AuthService`, `IUserRepository`, `LoginRequest` |
+| **SporticoApp.Infrastructure** | Implementations of Application interfaces: EF Core, JWT, Email, Repositories | `AppDbContext`, `UserRepository`, `JwtService`, `EmailService` |
+| **SporticoApp.Api** | HTTP entry point: Controllers, Middlewares, Swagger setup, DI wiring | `AuthController`, `ExceptionMiddleware`, `Program.cs` |
+| **SporticoApp.Shared** | Cross-cutting building blocks | `Result<T>`, `AppException`, `ErrorType`, `PagedResult<T>` |
 
-Dependency Injection được khai báo ở mỗi tầng qua file `DependencyInjection.cs` rồi được gọi lên trong `Program.cs`:
+Dependency Injection is declared per layer in each layer's `DependencyInjection.cs` and composed in `Program.cs`:
 
 ```csharp
 builder.Services.AddApplicationDI();
@@ -72,7 +72,7 @@ builder.Services.AddInfrastructureDI(builder.Configuration);
 
 ---
 
-## 2. Cấu trúc thư mục
+## 2. Folder Structure
 
 ```
 sportico-platform/
@@ -84,7 +84,7 @@ sportico-platform/
 │   ├── SporticoApp.Api/                # Web API entry point
 │   │   ├── Controllers/                # AuthController, ...
 │   │   ├── Middlewares/                # ExceptionMiddleware
-│   │   ├── Program.cs                  # Cấu hình pipeline + DI
+│   │   ├── Program.cs                  # Pipeline + DI configuration
 │   │   ├── appsettings.json
 │   │   └── appsettings.Development.json
 │   ├── SporticoApp.Application/        # Use cases, Interfaces, DTOs
@@ -105,48 +105,48 @@ sportico-platform/
 │       ├── Services/                   # JwtService, EmailService, RefreshTokenService
 │       └── DependencyInjection.cs
 └── .github/workflows/
-    └── main_sportico-api-khoi.yml      # CI/CD lên Azure App Service
+    └── main_sportico-api-khoi.yml      # CI/CD to Azure App Service
 ```
 
 ---
 
-## 3. Request Pipeline (vòng đời của một request)
+## 3. Request Pipeline (the life of a request)
 
-ASP.NET Core xử lý request theo cơ chế **middleware pipeline** — mỗi request đi qua một chuỗi middleware theo đúng thứ tự được đăng ký trong `Program.cs`. Thứ tự **rất quan trọng**, sai thứ tự là sai luôn hành vi (ví dụ: gọi `UseAuthorization` trước `UseAuthentication` sẽ làm policy không hoạt động).
+ASP.NET Core processes requests through a **middleware pipeline** — each request flows through a chain of middlewares in the exact order they are registered in `Program.cs`. **Order matters a lot**: getting it wrong silently breaks behavior (e.g. calling `UseAuthorization` before `UseAuthentication` makes policies ineffective).
 
-### Pipeline hiện tại của Sportico
+### Sportico's Current Pipeline
 
 ```
 HTTP Request
    │
    ▼
-[1] UseSwagger / UseSwaggerUI           ← Bật Swagger ở MỌI môi trường để xem trên Azure
+[1] UseSwagger / UseSwaggerUI           ← Enabled in ALL environments so it works on Azure too
    │
    ▼
-[2] (Development) UseHttpsRedirection   ← Chỉ bật ở local
+[2] (Development) UseHttpsRedirection   ← Local only
    │
    ▼
-[3] UseHttpsRedirection                 ← Bắt buộc HTTPS
+[3] UseHttpsRedirection                 ← Force HTTPS
    │
    ▼
-[4] UseAuthorization                    ← Kiểm tra quyền truy cập
+[4] UseAuthorization                    ← Access control checks
    │
    ▼
-[5] UseMiddleware<ExceptionMiddleware>  ← Bắt mọi exception, trả Result<T> chuẩn
+[5] UseMiddleware<ExceptionMiddleware>  ← Catches every exception, returns a standardized Result<T>
    │
    ▼
-[6] MapControllers                      ← Routing vào Controller tương ứng
+[6] MapControllers                      ← Routes the request to the matching Controller
    │
    ▼
 Controller → Service (Application) → Repository (Infrastructure) → DbContext → PostgreSQL
    │
    ▼
-Response (JSON, camelCase, enum dạng string)
+Response (JSON, camelCase, enums as strings)
 ```
 
-### Các điểm quan trọng
+### Key Points
 
-**a. Cấu hình JSON toàn cục**
+**a. Global JSON configuration**
 
 ```csharp
 builder.Services
@@ -158,25 +158,25 @@ builder.Services
     });
 ```
 
-→ Đảm bảo mọi response trả về client đều ở dạng `camelCase`, enum hiển thị tên chuỗi thay vì số.
+→ Guarantees every response is `camelCase` and enums are serialized as their string names instead of integer values.
 
-**b. ExceptionMiddleware — Xử lý lỗi tập trung**
+**b. ExceptionMiddleware — Centralized Error Handling**
 
-Mọi exception ở các tầng dưới đều được middleware này bắt lại và trả về định dạng `Result<T>` thống nhất:
+Exceptions raised anywhere downstream are caught by this middleware and returned in a consistent `Result<T>` envelope:
 
 ```json
 {
   "isSuccess": false,
   "error": {
     "code": "USER_NOT_FOUND",
-    "message": "Người dùng không tồn tại",
+    "message": "User does not exist",
     "type": "NotFound",
     "details": null
   }
 }
 ```
 
-Service / Repository **chỉ cần** `throw new AppException(...)` với `ErrorType` phù hợp — middleware tự ánh xạ sang HTTP status code:
+Services / Repositories simply `throw new AppException(...)` with the appropriate `ErrorType` — the middleware maps it to the right HTTP status code:
 
 | ErrorType | HTTP Status |
 |---|---|
@@ -185,39 +185,39 @@ Service / Repository **chỉ cần** `throw new AppException(...)` với `ErrorT
 | `Forbidden` | 403 |
 | `NotFound` | 404 |
 | `Conflict` | 409 |
-| `Failure` (mặc định) | 500 |
+| `Failure` (default) | 500 |
 
-**c. Swagger luôn bật**
+**c. Swagger is always on**
 
-Khác với template mặc định (chỉ bật Swagger ở Development), dự án này **bật Swagger ở mọi môi trường**, đồng thời `RoutePrefix = string.Empty` để truy cập trực tiếp tại root URL của Azure App Service:
+Unlike the default template (which only enables Swagger in Development), this project **enables Swagger in every environment**, with `RoutePrefix = string.Empty` so it can be reached directly at the root URL of the Azure App Service:
 
 ```
 https://sportico-api-khoi.azurewebsites.net/
 ```
 
-**d. Load `.env` ở local**
+**d. `.env` loading for local dev**
 
-`LoadEnvIfPresent()` sẽ leo lên tối đa 5 cấp thư mục tìm file `.env` và load vào biến môi trường — tiện cho dev local mà không cần sửa `appsettings.Development.json`. Trên Azure, biến môi trường được cấu hình qua **App Settings**.
+`LoadEnvIfPresent()` walks up to 5 parent directories looking for a `.env` file and loads it into environment variables — handy for local development without modifying `appsettings.Development.json`. On Azure, environment variables are configured via **App Settings**.
 
 ---
 
-## 4. Read vs Write — Quy ước `AsNoTracking`
+## 4. Read vs Write — The `AsNoTracking` Convention
 
-### Vấn đề
+### The Problem
 
-EF Core mặc định **track** mọi entity được load lên: nó giữ snapshot để phát hiện thay đổi khi `SaveChanges()`. Cơ chế này **tốn RAM và CPU** một cách vô ích nếu bạn chỉ đọc dữ liệu để trả về client mà không định cập nhật.
+By default, EF Core **tracks** every entity it loads: it stores a snapshot in order to detect changes during `SaveChanges()`. This mechanism **wastes RAM and CPU** when you only intend to read data and return it to the client.
 
-### Quy ước trong Sportico
+### Convention Used in Sportico
 
-| Loại thao tác | Cách viết query | Lý do |
+| Operation | Query style | Why |
 |---|---|---|
-| **Read-only** (GET, list, detail, search…) | **PHẢI** dùng `.AsNoTracking()` | Nhanh hơn, ít tốn RAM, không cần change tracking |
-| **Write** (Create / Update / Delete) | Dùng query tracking (mặc định) | EF Core cần track để phát hiện change |
+| **Read-only** (GET, list, detail, search…) | **MUST** use `.AsNoTracking()` | Faster, lower memory, no change tracking needed |
+| **Write** (Create / Update / Delete) | Default tracking query | EF Core needs tracking to detect changes |
 
-### Ví dụ
+### Examples
 
 ```csharp
-// ✅ Read-only — dùng AsNoTracking
+// ✅ Read-only — uses AsNoTracking
 public async Task<User?> GetByEmailAsync(string email)
 {
     return await _context.Users
@@ -225,7 +225,7 @@ public async Task<User?> GetByEmailAsync(string email)
         .FirstOrDefaultAsync(u => u.Email == email);
 }
 
-// ✅ Write — KHÔNG dùng AsNoTracking
+// ✅ Write — do NOT use AsNoTracking
 public async Task UpdateAsync(User user)
 {
     _context.Users.Update(user);
@@ -233,15 +233,15 @@ public async Task UpdateAsync(User user)
 }
 ```
 
-> **Lưu ý**: Khi bạn dùng `.AsNoTracking()` rồi muốn `Update` lại entity đó, phải `Attach` lại hoặc dùng `Update()` thủ công. Vì vậy: query nào dùng để **trả về cho client** thì `AsNoTracking`; query nào dùng để **sửa rồi save** thì giữ nguyên.
+> **Heads up**: If you load an entity with `.AsNoTracking()` and later want to `Update` it, you must `Attach` it manually or call `Update()` explicitly. Rule of thumb: queries that **return data to the client** use `AsNoTracking`; queries that **load an entity to modify and save** keep the default tracking behavior.
 
-Quy ước này áp dụng cho **mọi Repository mới**. Khi review PR, đây là một trong những checklist bắt buộc.
+This rule applies to **every new Repository**. It is one of the mandatory checklist items during PR review.
 
 ---
 
-## 5. Pagination — Phân trang chuẩn
+## 5. Pagination — Standard Paging
 
-Bất kỳ endpoint nào trả về **danh sách** đều **bắt buộc** hỗ trợ phân trang. Không bao giờ trả nguyên một `List<T>` không giới hạn về client.
+Every endpoint that returns a **list** **must** support pagination. We never return an unbounded `List<T>` to the client.
 
 ### Request format
 
@@ -249,10 +249,10 @@ Bất kỳ endpoint nào trả về **danh sách** đều **bắt buộc** hỗ 
 GET /api/posts?pageNumber=1&pageSize=20
 ```
 
-| Tham số | Mặc định | Giới hạn |
+| Parameter | Default | Limit |
 |---|---|---|
 | `pageNumber` | 1 | >= 1 |
-| `pageSize` | 10 | 1 — 100 (chặn ở Application layer) |
+| `pageSize` | 10 | 1 — 100 (enforced in the Application layer) |
 
 ### Response format
 
@@ -271,7 +271,7 @@ GET /api/posts?pageNumber=1&pageSize=20
 }
 ```
 
-### Cách implement chuẩn ở Repository
+### Standard Repository Implementation
 
 ```csharp
 public async Task<PagedResult<Post>> GetPagedAsync(int pageNumber, int pageSize)
@@ -291,83 +291,83 @@ public async Task<PagedResult<Post>> GetPagedAsync(int pageNumber, int pageSize)
 }
 ```
 
-### Nguyên tắc
+### Rules
 
-1. **Luôn `OrderBy` trước khi `Skip/Take`** — nếu không, thứ tự không deterministic và phân trang sẽ sai.
-2. **`AsNoTracking` bắt buộc** (theo quy ước Read ở mục 4).
-3. **Count + Items** chạy trong 2 query, không gộp vào client.
-4. **Validate `pageSize` ở Application layer** để client không thể yêu cầu `pageSize=100000` gây quá tải DB.
+1. **Always `OrderBy` before `Skip/Take`** — without a deterministic ordering, paging results become unstable.
+2. **`AsNoTracking` is mandatory** (see the Read convention in section 4).
+3. **Count + Items run as two queries** — do not aggregate on the client side.
+4. **Validate `pageSize` in the Application layer** so clients cannot request `pageSize=100000` and overload the database.
 
 ---
 
-## 6. Cơ sở dữ liệu — PostgreSQL trên Render
+## 6. Database — PostgreSQL on Render
 
-Database của dự án được host trên **Render** (gói PostgreSQL miễn phí dành cho student / hobby project).
+The project's database is hosted on **Render** (free PostgreSQL tier suitable for student / hobby projects).
 
-### Vì sao chọn Render?
+### Why Render?
 
-- Miễn phí với hạn mức đủ cho giai đoạn EXE202.
-- Cung cấp **External Connection String** dùng được từ bất kỳ đâu (local dev, Azure App Service…).
-- Quản lý qua dashboard, có sẵn backup tự động ở plan trả phí.
+- Free, with a quota that fits the EXE202 timeline.
+- Provides an **External Connection String** usable from anywhere (local dev, Azure App Service, etc.).
+- Managed through a web dashboard; automatic backups available on paid plans.
 
-### Kết nối từ ứng dụng
+### Connecting from the App
 
-Connection string đặt trong biến môi trường (hoặc User Secrets ở local) với key:
+The connection string is stored as an environment variable (or in User Secrets for local dev) with the key:
 
 ```
 ConnectionStrings__Default=Host=...;Port=5432;Database=...;Username=...;Password=...;SslMode=Require;Trust Server Certificate=true
 ```
 
-EF Core được cấu hình dùng **Npgsql** trong [DependencyInjection.cs](src/SporticoApp.Infrastructure/DependencyInjection.cs):
+EF Core is configured to use **Npgsql** in [DependencyInjection.cs](src/SporticoApp.Infrastructure/DependencyInjection.cs):
 
 ```csharp
 services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(configuration.GetConnectionString("Default")));
 ```
 
-### Quy ước đặt tên (Snake Case)
+### Naming Convention (Snake Case)
 
-PostgreSQL theo convention là `snake_case`, nhưng C# entity là `PascalCase`. [AppDbContext.cs](src/SporticoApp.Infrastructure/Persistence/AppDbContext.cs) có hàm `ApplySnakeCaseNames()` tự động convert:
+PostgreSQL conventionally uses `snake_case`, while C# entities use `PascalCase`. [AppDbContext.cs](src/SporticoApp.Infrastructure/Persistence/AppDbContext.cs) contains an `ApplySnakeCaseNames()` method that converts them automatically:
 
-- `User` → bảng `user`
-- `CoachProfile.CreatedAt` → cột `created_at`
+- `User` → table `user`
+- `CoachProfile.CreatedAt` → column `created_at`
 
-Đồng thời bật sẵn các extension PostgreSQL hữu ích:
+It also enables several useful PostgreSQL extensions out of the box:
 
 ```csharp
-modelBuilder.HasPostgresExtension("citext");    // Case-insensitive text (email)
-modelBuilder.HasPostgresExtension("pg_trgm");   // Fuzzy search
-modelBuilder.HasPostgresExtension("pgcrypto");  // Mã hóa, UUID
+modelBuilder.HasPostgresExtension("citext");    // Case-insensitive text (emails)
+modelBuilder.HasPostgresExtension("pg_trgm");   // Fuzzy text search
+modelBuilder.HasPostgresExtension("pgcrypto");  // Encryption, UUIDs
 ```
 
 ### Migrations
 
 ```bash
-# Tạo migration mới
-dotnet ef migrations add <TenMigration> --project src/SporticoApp.Infrastructure --startup-project src/SporticoApp.Api
+# Create a new migration
+dotnet ef migrations add <MigrationName> --project src/SporticoApp.Infrastructure --startup-project src/SporticoApp.Api
 
-# Apply lên database
+# Apply migrations to the database
 dotnet ef database update --project src/SporticoApp.Infrastructure --startup-project src/SporticoApp.Api
 ```
 
-> **Cẩn thận**: Render free tier có thể bị **idle disconnect**. Connection đầu tiên sau khi idle có thể chậm hơn — đây là behavior bình thường, không phải bug.
+> **Caveat**: The Render free tier may **disconnect when idle**. The first request after an idle period can be slow — that is expected behavior, not a bug.
 
 ---
 
-## 7. CI/CD — Deploy Azure App Service (Student Account)
+## 7. CI/CD — Deploying to Azure App Service (Student Account)
 
-Backend được deploy lên **Azure App Service** với tài khoản **Azure for Students** (free credit $100, không yêu cầu thẻ tín dụng).
+The backend is deployed to **Azure App Service** using an **Azure for Students** account (free $100 credit, no credit card required).
 
-### Tài nguyên Azure
+### Azure Resources
 
 - **App Service**: `sportico-api-khoi`
-- **Plan**: Free F1 (đủ cho EXE202, có giới hạn về CPU minutes/ngày)
-- **Region**: gần Việt Nam nhất (Southeast Asia)
-- **URL Production**: `https://sportico-api-khoi.azurewebsites.net/`
+- **Plan**: Free F1 (enough for EXE202, with daily CPU-minute limits)
+- **Region**: closest to Vietnam (Southeast Asia)
+- **Production URL**: `https://sportico-api-khoi.azurewebsites.net/`
 
-### Workflow GitHub Actions
+### GitHub Actions Workflow
 
-File [.github/workflows/main_sportico-api-khoi.yml](.github/workflows/main_sportico-api-khoi.yml) tự động chạy mỗi khi có push lên branch `main`:
+The file [.github/workflows/main_sportico-api-khoi.yml](.github/workflows/main_sportico-api-khoi.yml) runs automatically on every push to the `main` branch:
 
 ```yaml
 on:
@@ -386,13 +386,13 @@ jobs:
   deploy:
     needs: build
     - Download artifact
-    - Login Azure (OIDC qua federated credentials)
-    - azure/webapps-deploy@v3 → push artifact lên App Service
+    - Login to Azure (OIDC via federated credentials)
+    - azure/webapps-deploy@v3 → push the artifact to App Service
 ```
 
-### Xác thực — OIDC (không dùng publish profile)
+### Authentication — OIDC (no publish profile)
 
-Workflow dùng **OpenID Connect** thay vì publish profile, an toàn hơn vì không cần lưu password:
+The workflow uses **OpenID Connect** instead of a publish profile, which is safer because no password is ever stored:
 
 ```yaml
 permissions:
@@ -400,17 +400,17 @@ permissions:
   contents: read
 ```
 
-Ba secret cần khai báo trong **Repo Settings → Secrets and variables → Actions**:
+Three secrets must be declared under **Repo Settings → Secrets and variables → Actions**:
 
-| Secret | Lấy từ đâu |
+| Secret | Where it comes from |
 |---|---|
-| `AZURE_CLIENT_ID` | App registration trong Azure AD |
+| `AZURE_CLIENT_ID` | App registration in Azure AD |
 | `AZURE_TENANT_ID` | Azure AD tenant |
-| `AZURE_SUBSCRIPTION_ID` | Subscription Azure for Students |
+| `AZURE_SUBSCRIPTION_ID` | Azure for Students subscription |
 
-### Cấu hình biến môi trường trên Azure
+### Configuring Environment Variables on Azure
 
-Vào **App Service → Settings → Environment variables (App settings)**, thêm các key:
+Go to **App Service → Settings → Environment variables (App settings)** and add:
 
 ```
 ConnectionStrings__Default     = <Render Postgres connection string>
@@ -420,33 +420,33 @@ JWT__Audience                  = ...
 EmailSettings__Password        = ...
 ```
 
-> Azure tự động map `__` (double underscore) thành dấu `:` của `IConfiguration` — không cần sửa code.
+> Azure automatically maps `__` (double underscore) to the `:` separator used by `IConfiguration` — no code changes required.
 
-### Sau khi deploy
+### After Deploying
 
-- Truy cập `https://sportico-api-khoi.azurewebsites.net/` để vào Swagger UI.
-- Xem log realtime: **App Service → Log stream**.
-- Restart app nếu cần: **Overview → Restart**.
+- Visit `https://sportico-api-khoi.azurewebsites.net/` to open Swagger UI.
+- Stream logs in real time: **App Service → Log stream**.
+- Restart the app if needed: **Overview → Restart**.
 
 ---
 
-## 8. Chạy dự án ở local
+## 8. Running the Project Locally
 
-### Yêu cầu
+### Requirements
 
-- .NET SDK **8.0** trở lên
-- PostgreSQL (local) hoặc dùng luôn connection string Render
+- .NET SDK **8.0** or later
+- PostgreSQL (local) or just reuse the Render connection string
 - IDE: Visual Studio 2022 / Rider / VS Code
 
-### Setup nhanh
+### Quick Setup
 
-1. Clone repo:
+1. Clone the repo:
    ```bash
    git clone <repo-url>
    cd sportico-platform
    ```
 
-2. Tạo file `.env` ở root (sẽ được `LoadEnvIfPresent()` tự load):
+2. Create a `.env` file in the repo root (it will be loaded automatically by `LoadEnvIfPresent()`):
    ```env
    ConnectionStrings__Default=Host=...;Port=5432;Database=sportico;Username=...;Password=...
    JWT__SecretKey=your-super-secret-min-32-chars
@@ -455,42 +455,42 @@ EmailSettings__Password        = ...
    EmailSettings__Password=app-password-gmail
    ```
 
-3. Restore + chạy migration:
+3. Restore dependencies and apply migrations:
    ```bash
    dotnet restore
    dotnet ef database update --project src/SporticoApp.Infrastructure --startup-project src/SporticoApp.Api
    ```
 
-4. Chạy API:
+4. Run the API:
    ```bash
    dotnet run --project src/SporticoApp.Api
    ```
 
-5. Mở Swagger: `https://localhost:5001/` (cổng tùy theo `launchSettings.json`).
+5. Open Swagger: `https://localhost:5001/` (port depends on `launchSettings.json`).
 
 ---
 
-## 9. Quy ước code & đóng góp
+## 9. Code Conventions & Contributing
 
-- **Naming**: PascalCase cho C#, snake_case cho cột DB (tự động convert).
-- **Async**: mọi method I/O đều `async/await`, hậu tố `Async`.
-- **Repository read-only**: bắt buộc `AsNoTracking()`.
-- **List endpoint**: bắt buộc pagination, trả `PagedResult<T>`.
-- **Exception**: throw `AppException` với `ErrorType` phù hợp — không trả `BadRequest()` thủ công.
-- **Response**: luôn bọc trong `Result<T>` để client có format thống nhất.
-- **Commit message**: ngắn gọn, dùng prefix `feat:`, `fix:`, `refactor:`, `chore:`.
+- **Naming**: PascalCase for C#, snake_case for DB columns (converted automatically).
+- **Async**: every I/O method is `async/await`, suffixed with `Async`.
+- **Read-only repositories**: must use `AsNoTracking()`.
+- **List endpoints**: must use pagination and return `PagedResult<T>`.
+- **Exceptions**: throw `AppException` with the proper `ErrorType` — do not return `BadRequest()` manually.
+- **Responses**: always wrap in `Result<T>` so the client sees a uniform shape.
+- **Commit messages**: short, prefixed with `feat:`, `fix:`, `refactor:`, `chore:`.
 
-### Pull Request checklist
+### Pull Request Checklist
 
-- [ ] Query read-only đã dùng `AsNoTracking`?
-- [ ] Endpoint trả list đã có pagination?
-- [ ] Đã `throw AppException` đúng `ErrorType`?
-- [ ] Đã chạy được local + không break Swagger?
-- [ ] Đã update migration nếu có sửa entity?
+- [ ] Are read-only queries using `AsNoTracking`?
+- [ ] Do list endpoints implement pagination?
+- [ ] Are `AppException`s thrown with the correct `ErrorType`?
+- [ ] Does the app run locally and is Swagger still working?
+- [ ] If entities changed, is the migration updated?
 
 ---
 
-## Liên hệ
+## Contact
 
-Dự án thuộc môn **EXE202 — FPT University**.
-Mọi câu hỏi vui lòng tạo issue hoặc liên hệ team Sportico.
+This project is part of **EXE202 — FPT University**.
+For questions please open an issue or reach out to the Sportico team.
