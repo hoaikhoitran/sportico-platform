@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SporticoApp.Api.Extensions;
+using SporticoApp.Application.DTOs.CoachPackages;
 using SporticoApp.Application.DTOs.Packages;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Shared.Constants;
@@ -33,6 +34,19 @@ namespace SporticoApp.Api.Controllers
             return Ok(result);
         }
 
+        [HttpGet("me/history")]
+        [ProducesResponseType(typeof(Result<PagedResult<CoachPackageResponse>>), 200)]
+        public async Task<IActionResult> GetHistory(
+            [FromQuery] CoachPackageHistoryFilterRequest filter)
+        {
+            var coachId = User.GetUserId();
+
+            var result =
+                await _coachPackageService.GetHistoryAsync(coachId, filter);
+
+            return Ok(result);
+        }
+
         [HttpPost("purchase/payos")]
         [ProducesResponseType(typeof(Result<PurchaseCoachPackagePayOsResponse>), 200)]
         public async Task<IActionResult> PurchaseWithPayOs(
@@ -42,6 +56,21 @@ namespace SporticoApp.Api.Controllers
 
             var result =
                 await _coachPackageService.PurchaseWithPayOsAsync(
+                    coachId,
+                    request);
+
+            return Ok(result);
+        }
+
+        [HttpPost("purchase/manual")]
+        [ProducesResponseType(typeof(Result<CoachPackageResponse>), 200)]
+        public async Task<IActionResult> PurchaseManual(
+            [FromBody] PurchaseCoachPackageRequest request)
+        {
+            var coachId = User.GetUserId();
+
+            var result =
+                await _coachPackageService.PurchaseManualAsync(
                     coachId,
                     request);
 
