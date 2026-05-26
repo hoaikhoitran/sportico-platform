@@ -28,7 +28,7 @@ public sealed class PostConfiguration : IEntityTypeConfiguration<Post>
         builder.Property(e => e.Status)
             .HasMaxLength(20)
             .HasDefaultValueSql("'draft'::character varying")
-            .HasComment("draft | published | archived | rejected");
+            .HasComment("draft | pending | published | archived | rejected");
         builder.Property(e => e.Title).HasMaxLength(255);
         builder.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 

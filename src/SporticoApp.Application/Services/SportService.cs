@@ -21,18 +21,15 @@ namespace SporticoApp.Application.Services
         private readonly ISportRepository _sportRepository;
         private readonly IValidator<CreateSportRequest> _validator;
         private readonly ISlugGenerator _slugGenerator;
-        private readonly IValidator<SportFilterRequest> _filterValidator;
 
         public SportService(
             ISportRepository sportRepository,
             IValidator<CreateSportRequest> validator,
-            ISlugGenerator slugGenerator,
-            IValidator<SportFilterRequest> filterValidator)
+            ISlugGenerator slugGenerator)
         {
             _sportRepository = sportRepository;
             _validator = validator;
             _slugGenerator = slugGenerator;
-            _filterValidator = filterValidator;
         }
 
         public async Task<Result<SportResponse>> CreateAsync(
@@ -83,59 +80,6 @@ namespace SporticoApp.Application.Services
 
             var sport = request.ToEntity(finalSlug);
             await _sportRepository.AddAsync(sport);
-
-            return Result<SportResponse>.Success(sport.ToResponse());
-        }
-
-        public async Task<Result<SportResponse>> GetByIdAsync(int id)
-        {
-            var sport = await _sportRepository.GetByIdAsync(id);
-            if (sport == null)
-            {
-                throw new NotFoundException(
-                    ErrorCodes.SportNotFound,
-                    "Sport not found");
-            }
-
-            return Result<SportResponse>.Success(sport.ToResponse());
-        }
-
-        public async Task<Result<PagedResult<SportResponse>>> GetPagedAsync(SportFilterRequest filter)
-        {
-            var validationResult = _filterValidator.Validate(filter);
-            if (!validationResult.IsValid)
-            {
-                var details = validationResult.Errors
-                    .Select(e => e.ErrorMessage)
-                    .ToList();
-                throw new ValidationException(
-                    ErrorCodes.ValidationError,
-                    "Invalid filter parameters",
-                    details);
-            }
-            var normalizedKeyword = string.IsNullOrWhiteSpace(filter.Keyword)
-                ? null
-                : filter.Keyword.Trim().ToLowerInvariant();
-            var result = await _sportRepository.GetPagedAsync(
-                normalizedKeyword, filter.IsActive, filter.PageNumber, filter.PageSize);
-            var responseItems = result.Items.ToResponseList();
-            var pagedResult = new PagedResult<SportResponse>(
-                responseItems, filter.PageNumber, filter.PageSize, result.TotalCount);
-            return Result<PagedResult<SportResponse>>.Success(pagedResult);
-        }
-
-        public async Task<Result<SportResponse>> UpdateStatusAsync(int id, UpdateSportStatusRequest request)
-        {
-            var sport = await _sportRepository.GetByIdAsync(id);
-            if (sport == null)
-            {
-                throw new NotFoundException(
-                    ErrorCodes.SportNotFound,
-                    "Sport not found");
-            }
-
-            sport.IsActive = request.IsActive;
-            await _sportRepository.SaveChangesAsync();
 
             return Result<SportResponse>.Success(sport.ToResponse());
         }

@@ -6,7 +6,12 @@ using System.Threading.Tasks;
 
 namespace SporticoApp.Application.DTOs.Packages
 {
-    internal class CreatePackageRequest
+    public class CreatePackageRequest
     {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public int DurationDays { get; set; }
+        public int MaxPosts { get; set; }
+        public decimal Price { get; set; }
     }
 }

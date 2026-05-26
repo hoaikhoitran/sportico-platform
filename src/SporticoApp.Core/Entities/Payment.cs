@@ -33,6 +33,13 @@ public partial class Payment
     public DateTime CreatedAt { get; set; }
 
     public DateTime? PaidAt { get; set; }
+    public long? OrderCode { get; set; }
+
+    public string? PaymentLinkId { get; set; }
+
+    public string? CheckoutUrl { get; set; }
+
+    public DateTime? ExpiredAt { get; set; }
 
     public virtual ICollection<PaymentTransaction> PaymentTransactions { get; set; } = new List<PaymentTransaction>();
 

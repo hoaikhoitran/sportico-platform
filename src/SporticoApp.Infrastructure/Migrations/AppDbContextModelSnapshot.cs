@@ -487,11 +487,20 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("amount");
 
+                    b.Property<string>("CheckoutUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("checkout_url");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("ExpiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expired_at");
 
                     b.Property<string>("Method")
                         .IsRequired()
@@ -499,9 +508,18 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("method");
 
+                    b.Property<long?>("OrderCode")
+                        .HasColumnType("bigint")
+                        .HasColumnName("order_code");
+
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("paid_at");
+
+                    b.Property<string>("PaymentLinkId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("payment_link_id");
 
                     b.Property<Guid?>("ReferenceId")
                         .HasColumnType("uuid")
@@ -538,6 +556,10 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.HasIndex(new[] { "CreatedAt" }, "idx_payments_created_at")
                         .IsDescending();
 
+                    b.HasIndex(new[] { "OrderCode" }, "idx_payments_order_code")
+                        .IsUnique()
+                        .HasFilter("(order_code IS NOT NULL)");
+
                     b.HasIndex(new[] { "ReferenceType", "ReferenceId" }, "idx_payments_reference");
 
                     b.HasIndex(new[] { "Status" }, "idx_payments_status");
@@ -550,6 +572,10 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToTable("payments", null, t =>
                         {
                             t.HasComment("Giao dịch thanh toán");
+
+                            t.HasCheckConstraint("chk_payments_method", "method IN ('manual', 'payos')");
+
+                            t.HasCheckConstraint("chk_payments_status", "status IN ('pending', 'paid', 'failed', 'cancelled')");
                         });
                 });
 
@@ -635,7 +661,7 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status")
                         .HasDefaultValueSql("'draft'::character varying")
-                        .HasComment("draft | published | archived | rejected");
+                        .HasComment("draft | pending | published | archived | rejected");
 
                     b.Property<string>("Title")
                         .IsRequired()

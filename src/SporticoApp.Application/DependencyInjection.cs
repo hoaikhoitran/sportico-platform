@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Application.Services;
 using SporticoApp.Application.Validators.Coaches;
-using SporticoApp.Application.Validators.Sports;
 
 namespace SporticoApp.Application
 {
@@ -13,17 +12,14 @@ namespace SporticoApp.Application
         {
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<ICoachService, CoachService>();
+            services.AddScoped<ICoachPackageService, CoachPackageService>();
             services.AddScoped<IPackageService, PackageService>();
+            services.AddScoped<IPostService, PostService>();
+            services.AddScoped<IAdminPostService, AdminPostService>();
             services.AddScoped<ISportService, SportService>();
 
             services.AddValidatorsFromAssemblyContaining
                 <RegisterCoachRequestValidator>();
-
-            services.AddValidatorsFromAssemblyContaining
-                <CreateSportRequestValidator>();
-
-            services.AddValidatorsFromAssemblyContaining
-                <CreateSportRequestValidator>();
 
             return services;
         }

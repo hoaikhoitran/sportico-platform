@@ -1,12 +1,15 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Infrastructure.Persistence;
 using SporticoApp.Infrastructure.Persistence.Configurations;
 using SporticoApp.Infrastructure.Persistence.Repositories;
 using SporticoApp.Infrastructure.Services;
+using SporticoApp.Infrastructure.Services.Payments;
 
 namespace SporticoApp.Infrastructure
 {
@@ -23,16 +26,30 @@ namespace SporticoApp.Infrastructure
             services.Configure<EmailSettings>(options =>
                 configuration.GetSection("EmailSettings").Bind(options));
 
+            services.Configure<PayOsSettings>(options =>
+                configuration.GetSection("PayOs").Bind(options));
+
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IUserRoleRepository, UserRoleRepository>();
             services.AddScoped<ICoachRepository, CoachRepository>();
             services.AddScoped<ISportRepository, SportRepository>();
+            services.AddScoped<IPackageRepository, PackageRepository>();
+            services.AddScoped<ICoachPackageRepository, CoachPackageRepository>();
+            services.AddScoped<IPaymentRepository, PaymentRepository>();
+            services.AddScoped<IPostRepository, PostRepository>();
+            
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddSingleton<ISlugGenerator, SlugGenerator>();
+
+            services.AddHttpClient<IPayOsService, PayOsService>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<IOptions<PayOsSettings>>().Value;
+                client.BaseAddress = new Uri(settings.BaseUrl);
+            });
 
             return services;
         }

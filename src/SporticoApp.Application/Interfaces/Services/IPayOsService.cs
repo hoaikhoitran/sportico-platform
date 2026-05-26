@@ -1,0 +1,19 @@
+﻿using SporticoApp.Application.DTOs.Payments;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace SporticoApp.Application.Interfaces.Services
+{
+    public interface IPayOsService
+    {
+        Task<CreatePayOsPaymentResult> CreatePaymentLinkAsync(
+            CreatePayOsPaymentRequest request);
+
+        bool VerifyWebhookSignature(
+            object data,
+            string signature);
+    }
+}

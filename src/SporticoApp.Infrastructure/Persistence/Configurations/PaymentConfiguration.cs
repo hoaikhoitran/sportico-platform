@@ -8,7 +8,18 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 {
     public void Configure(EntityTypeBuilder<Payment> builder)
     {
-        builder.ToTable("payments", tb => tb.HasComment("Giao dịch thanh toán"));
+        builder.ToTable("payments", tb =>
+{
+            tb.HasComment("Giao dịch thanh toán");
+
+            tb.HasCheckConstraint(
+                "chk_payments_method",
+                "method IN ('manual', 'payos')");
+
+            tb.HasCheckConstraint(
+                "chk_payments_status",
+                "status IN ('pending', 'paid', 'failed', 'cancelled')");
+        });
 
         builder.HasKey(e => e.Id).HasName("payments_pkey");
 
@@ -17,6 +28,15 @@ public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasIndex(e => e.Status, "idx_payments_status");
         builder.HasIndex(e => e.UserId, "idx_payments_user");
         builder.HasIndex(e => e.TransactionCode, "payments_transaction_code_key").IsUnique();
+        builder.HasIndex(e => e.OrderCode, "idx_payments_order_code")
+            .IsUnique()
+            .HasFilter("(order_code IS NOT NULL)");
+
+        builder.Property(e => e.PaymentLinkId)
+            .HasMaxLength(100);
+
+        builder.Property(e => e.CheckoutUrl)
+            .HasMaxLength(1000);
 
         builder.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
         builder.Property(e => e.Amount).HasPrecision(12, 2);
