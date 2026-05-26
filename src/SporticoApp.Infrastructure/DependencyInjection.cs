@@ -38,7 +38,8 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<ICoachPackageRepository, CoachPackageRepository>();
             services.AddScoped<IPaymentRepository, PaymentRepository>();
             services.AddScoped<IPostRepository, PostRepository>();
-            
+            services.AddScoped<INotificationRepository, NotificationRepository>();
+
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();

@@ -97,5 +97,8 @@ namespace SporticoApp.Shared.Constants
             "POST_QUOTA_EXCEEDED";
         public const string InvalidPostStatus =
             "INVALID_POST_STATUS";
+        // Notification
+        public const string NotificationNotFound =
+            "NOTIFICATION_NOT_FOUND";
     }
 }
