@@ -18,45 +18,12 @@ namespace SporticoApp.Api.Controllers
             _sportService = sportService;
         }
 
-        [HttpGet]
-        [AllowAnonymous]
-        [ProducesResponseType(typeof(Result<PagedResult<SportResponse>>), 200)]
-        public async Task<IActionResult> GetSports(
-            [FromQuery] SportFilterRequest filter)
-        {
-            var result = await _sportService.GetPagedAsync(filter);
-            return Ok(result);
-        }
-
-        [HttpGet("{id:int}")]
-        [AllowAnonymous]
-        [ProducesResponseType(typeof(Result<SportResponse>), 200)]
-        [ProducesResponseType(typeof(Result<object>), 404)]
-        public async Task<IActionResult> GetById(int id)
-        {
-            var result = await _sportService.GetByIdAsync(id);
-            return Ok(result);
-        }
-
         [HttpPost]
         [Authorize(Roles = RoleConstants.Admin)]
         [ProducesResponseType(typeof(Result<SportResponse>), 200)]
-        public async Task<IActionResult> Create(
-            [FromBody] CreateSportRequest request)
+        public async Task<IActionResult> Create([FromBody] CreateSportRequest request)
         {
             var result = await _sportService.CreateAsync(request);
-            return Ok(result);
-        }
-
-        [HttpPut("{id:int}")]
-        [Authorize(Roles = RoleConstants.Admin)]
-        [ProducesResponseType(typeof(Result<SportResponse>), 200)]
-        [ProducesResponseType(typeof(Result<object>), 404)]
-        public async Task<IActionResult> UpdateStatus(
-            int id,
-            [FromBody] UpdateSportStatusRequest request)
-        {
-            var result = await _sportService.UpdateStatusAsync(id, request);
             return Ok(result);
         }
     }

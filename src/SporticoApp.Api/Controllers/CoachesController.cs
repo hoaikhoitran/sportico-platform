@@ -1,8 +1,10 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SporticoApp.Api.Extensions;
 using SporticoApp.Application.DTOs.Coaches;
 using SporticoApp.Application.Interfaces.Services;
+using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Exceptions;
 using SporticoApp.Shared.Responses;
 
 namespace SporticoApp.Api.Controllers
@@ -24,11 +26,16 @@ namespace SporticoApp.Api.Controllers
         public async Task<IActionResult> Register(
             [FromBody] RegisterCoachRequest request)
         {
-            var userId = User.GetUserId();
+            var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(userIdValue) ||
+                !Guid.TryParse(userIdValue, out var userId))
+            {
+                throw new UnauthorizedException(
+                    ErrorCodes.InvalidCredentials,
+                    "Invalid access token");
+            }
 
-            var result =
-                await _coachService.RegisterCoachAsync(userId, request);
-
+            var result = await _coachService.RegisterCoachAsync(userId, request);
             return Ok(result);
         }
     }
