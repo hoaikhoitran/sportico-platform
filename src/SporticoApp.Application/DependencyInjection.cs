@@ -22,6 +22,9 @@ namespace SporticoApp.Application
             services.AddValidatorsFromAssemblyContaining
                 <CreateSportRequestValidator>();
 
+            services.AddValidatorsFromAssemblyContaining
+                <CreateSportRequestValidator>();
+
             return services;
         }
     }

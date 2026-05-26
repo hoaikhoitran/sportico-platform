@@ -64,5 +64,42 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             _context.Sports.Add(sport);
             await _context.SaveChangesAsync();
         }
+
+        public async Task<(List<Sport> Items, int TotalCount)> GetPagedAsync(string? keyword, bool? isActive, int pageNumber, int pageSize)
+        {
+            var query = _context.Sports
+                .AsNoTracking()
+                .AsQueryable();
+            if(!string.IsNullOrWhiteSpace(keyword))
+            {
+                var normalizedKeyword = keyword.Trim().ToLower();
+                query = query.Where(x =>
+                    x.Name.ToLower().Contains(normalizedKeyword) ||
+                    x.Slug.ToLower().Contains(normalizedKeyword));
+            }
+
+            if (isActive.HasValue)
+            {
+                query = query.Where(x => x.IsActive == isActive.Value);
+            }
+            var totalCount = await query.CountAsync();
+            var sports = await query
+                .OrderByDescending(x => x.CreatedAt)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+            return (sports, totalCount);
+        }
+
+        public async Task<Sport?> GetForUpdateByIdAsync(int id)
+        {
+            return await _context.Sports
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            await _context.SaveChangesAsync();
+        }
     }
 }

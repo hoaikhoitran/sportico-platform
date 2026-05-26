@@ -41,5 +41,13 @@ namespace SporticoApp.Application.Mappings
                 CreatedAt = sport.CreatedAt
             };
         }
+
+        public static List<SportResponse> ToResponseList(
+            this IEnumerable<Sport> sports)
+        {
+            return sports
+                .Select(x => x.ToResponse())
+                .ToList();
+        }
     }
 }
