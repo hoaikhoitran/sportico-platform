@@ -105,11 +105,15 @@ namespace SporticoApp.Application.Services
             }
 
             var post = request.ToEntity(coachId);
-            post.Sport = sport;
 
             currentPackage.RemainingPosts -= 1;
 
             await _postRepository.AddAsync(post);
+
+            // Assign the (no-tracking) sport only after persisting so EF does not
+            // treat it as a new related entity and attempt to re-insert it.
+            // ToEntity already sets the SportId FK; this is purely for the response.
+            post.Sport = sport;
 
             return Result<PostResponse>.Success(post.ToResponse());
         }

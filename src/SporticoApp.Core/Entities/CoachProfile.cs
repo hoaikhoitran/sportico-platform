@@ -38,5 +38,23 @@ public partial class CoachProfile
 
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
+    public virtual ICollection<TrainingPackage> TrainingPackages { get; set; } = new List<TrainingPackage>();
+
+    public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+
+    public virtual ICollection<TrainingSession> TrainingSessions { get; set; } = new List<TrainingSession>();
+
+    public virtual ICollection<LearnerAssessment> LearnerAssessments { get; set; } = new List<LearnerAssessment>();
+
+    public virtual ICollection<TrainingPlan> TrainingPlans { get; set; } = new List<TrainingPlan>();
+
+    public virtual ICollection<ProgressCheckIn> ProgressCheckIns { get; set; } = new List<ProgressCheckIn>();
+
+    public virtual CoachPayoutAccount? PayoutAccount { get; set; }
+
+    public virtual CoachWallet? Wallet { get; set; }
+
+    public virtual ICollection<WithdrawalRequest> WithdrawalRequests { get; set; } = new List<WithdrawalRequest>();
+
     public virtual User User { get; set; } = null!;
 }

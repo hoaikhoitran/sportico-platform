@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -112,6 +113,10 @@ namespace SporticoApp.Infrastructure.Services.Payments
 
             var data = root.GetProperty("data");
 
+            _logger.LogInformation(
+                "payOS create payment succeeded: {RawJson}",
+                rawJson);
+
             var paymentLinkId =
                 data.GetProperty("paymentLinkId").GetString() ?? string.Empty;
 
@@ -132,7 +137,81 @@ namespace SporticoApp.Infrastructure.Services.Payments
             object data,
             string signature)
         {
-            return !string.IsNullOrWhiteSpace(signature);
+            // Fail closed: missing signature, missing checksum key, or a
+            // payload that is not the nested webhook data object => reject.
+            if (string.IsNullOrWhiteSpace(signature))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.ChecksumKey))
+            {
+                return false;
+            }
+
+            if (data is not JsonElement element ||
+                element.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            var canonicalData = BuildCanonicalData(element);
+
+            var expectedSignature = GenerateHmacSha256(
+                canonicalData,
+                _settings.ChecksumKey);
+
+            var expectedBytes = Encoding.UTF8.GetBytes(expectedSignature);
+            var receivedBytes = Encoding.UTF8.GetBytes(
+                signature.Trim().ToLowerInvariant());
+
+            return CryptographicOperations.FixedTimeEquals(
+                expectedBytes,
+                receivedBytes);
+        }
+
+        // Reconstructs the payOS canonical string: data fields sorted by key
+        // (ascending), joined as key=value&key2=value2. The signature field,
+        // if echoed inside data, is excluded from the signed content.
+        private static string BuildCanonicalData(JsonElement data)
+        {
+            var pairs = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var property in data.EnumerateObject())
+            {
+                if (string.Equals(
+                        property.Name,
+                        "signature",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                pairs[property.Name] = ConvertJsonValueToString(property.Value);
+            }
+
+            return string.Join("&", pairs.Select(p => $"{p.Key}={p.Value}"));
+        }
+
+        private static string ConvertJsonValueToString(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.String:
+                    return element.GetString() ?? string.Empty;
+                case JsonValueKind.Number:
+                    return element.GetRawText();
+                case JsonValueKind.True:
+                    return "true";
+                case JsonValueKind.False:
+                    return "false";
+                case JsonValueKind.Null:
+                case JsonValueKind.Undefined:
+                    return string.Empty;
+                default:
+                    // Nested object/array: use the raw JSON text.
+                    return element.GetRawText();
+            }
         }
 
         private static string GenerateHmacSha256(

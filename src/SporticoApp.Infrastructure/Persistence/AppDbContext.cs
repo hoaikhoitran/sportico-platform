@@ -13,10 +13,15 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
+    public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<CoachPayoutAccount> CoachPayoutAccounts => Set<CoachPayoutAccount>();
+    public DbSet<CoachWallet> CoachWallets => Set<CoachWallet>();
+    public DbSet<CoachWalletTransaction> CoachWalletTransactions => Set<CoachWalletTransaction>();
     public DbSet<CoachPackage> CoachPackages => Set<CoachPackage>();
     public DbSet<CoachProfile> CoachProfiles => Set<CoachProfile>();
     public DbSet<CoachSport> CoachSports => Set<CoachSport>();
     public DbSet<Follow> Follows => Set<Follow>();
+    public DbSet<LearnerAssessment> LearnerAssessments => Set<LearnerAssessment>();
     public DbSet<LearnerProfile> LearnerProfiles => Set<LearnerProfile>();
     public DbSet<MessageAttachment> MessageAttachments => Set<MessageAttachment>();
     public DbSet<Message> Messages => Set<Message>();
@@ -26,14 +31,22 @@ public class AppDbContext : DbContext
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PostImage> PostImages => Set<PostImage>();
     public DbSet<Post> Posts => Set<Post>();
+    public DbSet<ProgressCheckIn> ProgressCheckIns => Set<ProgressCheckIn>();
     public DbSet<Report> Reports => Set<Report>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Sport> Sports => Set<Sport>();
+    public DbSet<TrainingPackage> TrainingPackages => Set<TrainingPackage>();
+    public DbSet<TrainingPlanDay> TrainingPlanDays => Set<TrainingPlanDay>();
+    public DbSet<TrainingPlanExercise> TrainingPlanExercises => Set<TrainingPlanExercise>();
+    public DbSet<TrainingPlanWeek> TrainingPlanWeeks => Set<TrainingPlanWeek>();
+    public DbSet<TrainingPlan> TrainingPlans => Set<TrainingPlan>();
+    public DbSet<TrainingSession> TrainingSessions => Set<TrainingSession>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<User> Users => Set<User>();
     public DbSet<VCoach> VCoaches => Set<VCoach>();
     public DbSet<VPublishedPost> VPublishedPosts => Set<VPublishedPost>();
+    public DbSet<WithdrawalRequest> WithdrawalRequests => Set<WithdrawalRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

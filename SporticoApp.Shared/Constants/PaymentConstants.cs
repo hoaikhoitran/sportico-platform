@@ -17,6 +17,7 @@
     public static class PaymentReferenceTypes
     {
         public const string CoachPackage = "coach_package";
+        public const string Booking = "booking";
     }
 
     public static class CoachPackageStatuses

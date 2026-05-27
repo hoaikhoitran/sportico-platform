@@ -178,4 +178,12 @@ temp/
 # Azure / deployment local files
 # =========================================================
 .azure/
-.deployment.local
+.deployment.local.mcp.json 
+# =========================================================
+# AI / MCP / Claude / local agent configs
+# =========================================================
+.mcp.json
+*.mcp.json
+*.local.mcp.json
+.claude/
+.cursor/

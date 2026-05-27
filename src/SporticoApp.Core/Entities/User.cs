@@ -50,6 +50,16 @@ public partial class User
 
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
+    public virtual ICollection<Booking> BookingsAsLearner { get; set; } = new List<Booking>();
+
+    public virtual ICollection<TrainingSession> TrainingSessionsAsLearner { get; set; } = new List<TrainingSession>();
+
+    public virtual ICollection<LearnerAssessment> LearnerAssessments { get; set; } = new List<LearnerAssessment>();
+
+    public virtual ICollection<TrainingPlan> TrainingPlansAsLearner { get; set; } = new List<TrainingPlan>();
+
+    public virtual ICollection<ProgressCheckIn> ProgressCheckInsAsLearner { get; set; } = new List<ProgressCheckIn>();
+
     public virtual ICollection<Report> ReportsAsReporter { get; set; } = new List<Report>();
 
     public virtual ICollection<Report> ReportsAsTargetUser { get; set; } = new List<Report>();

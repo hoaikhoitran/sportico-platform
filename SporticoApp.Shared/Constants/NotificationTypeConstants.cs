@@ -16,5 +16,9 @@ namespace SporticoApp.Shared.Constants
         public const string Post = "post";
         public const string System = "system";
         public const string Report = "report";
+        public const string Booking = "booking";
+        public const string TrainingPackage = "training_package";
+        public const string TrainingSession = "training_session";
+        public const string Wallet = "wallet";
     }
 }

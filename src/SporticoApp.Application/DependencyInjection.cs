@@ -17,6 +17,19 @@ namespace SporticoApp.Application
             services.AddScoped<IPostService, PostService>();
             services.AddScoped<IAdminPostService, AdminPostService>();
             services.AddScoped<ISportService, SportService>();
+            services.AddScoped<ITrainingPackageService, TrainingPackageService>();
+            services.AddScoped<IAdminTrainingPackageService, AdminTrainingPackageService>();
+            services.AddScoped<IPublicTrainingPackageService, PublicTrainingPackageService>();
+            services.AddScoped<IBookingService, BookingService>();
+            services.AddScoped<ITrainingSessionService, TrainingSessionService>();
+            services.AddScoped<ILearnerAssessmentService, LearnerAssessmentService>();
+            services.AddScoped<ITrainingPlanService, TrainingPlanService>();
+            services.AddScoped<IProgressCheckInService, ProgressCheckInService>();
+            services.AddScoped<ICoachPayoutAccountService, CoachPayoutAccountService>();
+            services.AddScoped<ICoachWalletService, CoachWalletService>();
+            services.AddScoped<IWithdrawalService, WithdrawalService>();
+            services.AddScoped<IChatService, ChatService>();
+            services.AddScoped<INotificationService, NotificationService>();
 
             services.AddValidatorsFromAssemblyContaining
                 <RegisterCoachRequestValidator>();

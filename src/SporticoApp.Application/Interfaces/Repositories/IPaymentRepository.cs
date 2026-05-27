@@ -18,6 +18,8 @@ namespace SporticoApp.Application.Interfaces.Repositories
 
         Task AddWithoutSaveAsync(Payment payment);
 
+        Task AddTransactionWithoutSaveAsync(PaymentTransaction transaction);
+
         Task SaveChangesAsync();
     }
 }

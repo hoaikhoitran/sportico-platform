@@ -1,0 +1,16 @@
+using FluentValidation;
+using SporticoApp.Application.DTOs.Bookings;
+
+namespace SporticoApp.Application.Validators.Bookings
+{
+    public class PurchaseTrainingPackageManualRequestValidator
+        : AbstractValidator<PurchaseTrainingPackageManualRequest>
+    {
+        public PurchaseTrainingPackageManualRequestValidator()
+        {
+            RuleFor(x => x.TrainingPackageId)
+                .NotEmpty()
+                .WithMessage("TrainingPackageId is required");
+        }
+    }
+}

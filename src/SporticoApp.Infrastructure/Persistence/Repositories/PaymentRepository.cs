@@ -54,6 +54,12 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return Task.CompletedTask;
         }
 
+        public Task AddTransactionWithoutSaveAsync(PaymentTransaction transaction)
+        {
+            _context.PaymentTransactions.Add(transaction);
+            return Task.CompletedTask;
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

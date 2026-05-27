@@ -26,6 +26,116 @@ namespace SporticoApp.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pgcrypto");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.Booking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<decimal>("CoachReceiveAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("coach_receive_amount");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<int>("CompletedSessions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("completed_sessions");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("LearnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("learner_id");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<decimal>("PerSessionCoachAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("per_session_coach_amount");
+
+                    b.Property<decimal>("PlatformFeeAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("platform_fee_amount");
+
+                    b.Property<decimal>("PlatformFeeRate")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("platform_fee_rate");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'pending_payment'::character varying")
+                        .HasComment("pending_payment | active | completed | cancelled | refunded");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total_amount");
+
+                    b.Property<int>("TotalSessions")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("total_sessions");
+
+                    b.Property<Guid>("TrainingPackageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_package_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("bookings_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_bookings_coach");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "idx_bookings_created_at")
+                        .IsDescending();
+
+                    b.HasIndex(new[] { "LearnerId" }, "idx_bookings_learner");
+
+                    b.HasIndex(new[] { "Status" }, "idx_bookings_status");
+
+                    b.HasIndex(new[] { "TrainingPackageId" }, "idx_bookings_training_package");
+
+                    b.ToTable("bookings", null, t =>
+                        {
+                            t.HasComment("Bookings for training package purchases");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.ChatRoom", b =>
                 {
                     b.Property<Guid>("Id")
@@ -125,6 +235,77 @@ namespace SporticoApp.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachPayoutAccount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("BankAccountHolder")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("bank_account_holder");
+
+                    b.Property<string>("BankAccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("bank_account_number");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("bank_name");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("PayoutMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("payout_method");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'pending'::character varying")
+                        .HasComment("pending | verified | rejected");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("coach_payout_accounts_pkey");
+
+                    b.HasIndex(new[] { "Status" }, "idx_coach_payout_accounts_status");
+
+                    b.HasIndex(new[] { "CoachId" }, "uq_coach_payout_accounts_coach")
+                        .IsUnique();
+
+                    b.ToTable("coach_payout_accounts", null, t =>
+                        {
+                            t.HasComment("Coach payout account");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachProfile", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -212,6 +393,141 @@ namespace SporticoApp.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachWallet", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("AvailableBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("available_balance");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<decimal>("PendingBalance")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("pending_balance");
+
+                    b.Property<decimal>("TotalEarned")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("total_earned");
+
+                    b.Property<decimal>("TotalWithdrawn")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("total_withdrawn");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("coach_wallets_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "uq_coach_wallets_coach")
+                        .IsUnique();
+
+                    b.ToTable("coach_wallets", null, t =>
+                        {
+                            t.HasComment("Internal wallet for coach");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachWalletTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<Guid>("CoachWalletId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_wallet_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("direction");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<Guid?>("ReferenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reference_id");
+
+                    b.Property<string>("ReferenceType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("reference_type");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("coach_wallet_transactions_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_coach_wallet_transactions_coach");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "idx_coach_wallet_transactions_created_at")
+                        .IsDescending();
+
+                    b.HasIndex(new[] { "ReferenceType", "ReferenceId" }, "idx_coach_wallet_transactions_reference");
+
+                    b.HasIndex(new[] { "CoachWalletId" }, "idx_coach_wallet_transactions_wallet");
+
+                    b.ToTable("coach_wallet_transactions", null, t =>
+                        {
+                            t.HasComment("Coach wallet transactions");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.Follow", b =>
                 {
                     b.Property<Guid>("FollowerId")
@@ -236,6 +552,114 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToTable("follows", null, t =>
                         {
                             t.HasComment("User theo dõi user khác (chủ yếu learner follow coach)");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.LearnerAssessment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AvailableDaysPerWeek")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("available_days_per_week");
+
+                    b.Property<decimal?>("BodyFatPercent")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("body_fat_percent");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("CurrentLevel")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("current_level");
+
+                    b.Property<string>("EquipmentAvailable")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("equipment_available");
+
+                    b.Property<string>("GoalDescription")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("goal_description");
+
+                    b.Property<string>("GoalType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("goal_type");
+
+                    b.Property<string>("HealthNotes")
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)")
+                        .HasColumnName("health_notes");
+
+                    b.Property<decimal?>("HeightCm")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("height_cm");
+
+                    b.Property<string>("InjuryNotes")
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)")
+                        .HasColumnName("injury_notes");
+
+                    b.Property<Guid>("LearnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("learner_id");
+
+                    b.Property<int?>("PreferredSessionDurationMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("preferred_session_duration_minutes");
+
+                    b.Property<string>("TrainingHistory")
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)")
+                        .HasColumnName("training_history");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<decimal?>("WeightKg")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("weight_kg");
+
+                    b.HasKey("Id")
+                        .HasName("learner_assessments_pkey");
+
+                    b.HasIndex("CoachId");
+
+                    b.HasIndex("LearnerId");
+
+                    b.HasIndex(new[] { "BookingId" }, "uq_learner_assessments_booking")
+                        .IsUnique();
+
+                    b.ToTable("learner_assessments", null, t =>
+                        {
+                            t.HasComment("Learner assessment for personalization");
                         });
                 });
 
@@ -735,6 +1159,93 @@ namespace SporticoApp.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.ProgressCheckIn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal?>("BodyFatPercent")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("body_fat_percent");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CheckInDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("check_in_date");
+
+                    b.Property<string>("CoachFeedback")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("coach_feedback");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("EnergyLevel")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("energy_level");
+
+                    b.Property<Guid>("LearnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("learner_id");
+
+                    b.Property<string>("LearnerNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("learner_note");
+
+                    b.Property<string>("SleepQuality")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("sleep_quality");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<decimal?>("WaistCm")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("waist_cm");
+
+                    b.Property<decimal?>("WeightKg")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)")
+                        .HasColumnName("weight_kg");
+
+                    b.HasKey("Id")
+                        .HasName("progress_check_ins_pkey");
+
+                    b.HasIndex("CoachId");
+
+                    b.HasIndex("LearnerId");
+
+                    b.HasIndex(new[] { "BookingId", "CreatedAt" }, "idx_progress_check_ins_booking_created_at")
+                        .IsDescending(false, true);
+
+                    b.ToTable("progress_check_ins", null, t =>
+                        {
+                            t.HasComment("Progress check-ins for bookings");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -978,6 +1489,443 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToTable("sports", null, t =>
                         {
                             t.HasComment("Danh mục môn thể thao");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPackage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)")
+                        .HasColumnName("description");
+
+                    b.Property<int>("DurationDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_days");
+
+                    b.Property<string>("GoalType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("goal_type");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_online");
+
+                    b.Property<string>("Level")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("level");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("location");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_user_id");
+
+                    b.Property<int>("SessionCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("session_count");
+
+                    b.Property<int>("SportId")
+                        .HasColumnType("integer")
+                        .HasColumnName("sport_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'pending'::character varying")
+                        .HasComment("pending | published | rejected | archived");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("training_packages_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_training_packages_coach");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "idx_training_packages_created_at")
+                        .IsDescending();
+
+                    b.HasIndex(new[] { "Status" }, "idx_training_packages_published")
+                        .HasFilter("((status)::text = 'published'::text)");
+
+                    b.HasIndex(new[] { "SportId" }, "idx_training_packages_sport");
+
+                    b.HasIndex(new[] { "Status" }, "idx_training_packages_status");
+
+                    b.ToTable("training_packages", null, t =>
+                        {
+                            t.HasComment("Training packages created by coaches");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_date");
+
+                    b.Property<string>("GoalType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("goal_type");
+
+                    b.Property<Guid>("LearnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("learner_id");
+
+                    b.Property<string>("Overview")
+                        .HasMaxLength(3000)
+                        .HasColumnType("character varying(3000)")
+                        .HasColumnName("overview");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'draft'::character varying")
+                        .HasComment("draft | active | completed | cancelled");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<int>("TotalWeeks")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_weeks");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("training_plans_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_training_plans_coach");
+
+                    b.HasIndex(new[] { "LearnerId" }, "idx_training_plans_learner");
+
+                    b.HasIndex(new[] { "Status" }, "idx_training_plans_status");
+
+                    b.HasIndex(new[] { "BookingId" }, "uq_training_plans_booking")
+                        .IsUnique();
+
+                    b.ToTable("training_plans", null, t =>
+                        {
+                            t.HasComment("Training plans for bookings");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanDay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("DayNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("day_number");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<Guid>("TrainingPlanWeekId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_plan_week_id");
+
+                    b.HasKey("Id")
+                        .HasName("training_plan_days_pkey");
+
+                    b.HasIndex(new[] { "TrainingPlanWeekId", "DayNumber" }, "idx_training_plan_days_week_day")
+                        .IsUnique();
+
+                    b.ToTable("training_plan_days", null, t =>
+                        {
+                            t.HasComment("Daily breakdown for training plans");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanExercise", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("ExerciseName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("exercise_name");
+
+                    b.Property<string>("Intensity")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("intensity");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_index");
+
+                    b.Property<string>("Reps")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("reps");
+
+                    b.Property<int?>("RestSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("rest_seconds");
+
+                    b.Property<int?>("Sets")
+                        .HasColumnType("integer")
+                        .HasColumnName("sets");
+
+                    b.Property<Guid>("TrainingPlanDayId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_plan_day_id");
+
+                    b.HasKey("Id")
+                        .HasName("training_plan_exercises_pkey");
+
+                    b.HasIndex(new[] { "TrainingPlanDayId", "OrderIndex" }, "idx_training_plan_exercises_day_order");
+
+                    b.ToTable("training_plan_exercises", null, t =>
+                        {
+                            t.HasComment("Exercises for training plan days");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanWeek", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Focus")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("focus");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("notes");
+
+                    b.Property<Guid>("TrainingPlanId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("training_plan_id");
+
+                    b.Property<int>("WeekNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("week_number");
+
+                    b.HasKey("Id")
+                        .HasName("training_plan_weeks_pkey");
+
+                    b.HasIndex(new[] { "TrainingPlanId", "WeekNumber" }, "idx_training_plan_weeks_plan_week")
+                        .IsUnique();
+
+                    b.ToTable("training_plan_weeks", null, t =>
+                        {
+                            t.HasComment("Weekly breakdown for training plans");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<string>("CoachNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("coach_note");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<Guid>("LearnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("learner_id");
+
+                    b.Property<string>("LearnerNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("learner_note");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("location");
+
+                    b.Property<string>("MeetingUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("meeting_url");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'requested'::character varying")
+                        .HasComment("requested | scheduled | completed | cancelled | missed");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("training_sessions_pkey");
+
+                    b.HasIndex(new[] { "BookingId" }, "idx_training_sessions_booking");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_training_sessions_coach");
+
+                    b.HasIndex(new[] { "CoachId", "StartTime", "EndTime" }, "idx_training_sessions_coach_time");
+
+                    b.HasIndex(new[] { "LearnerId" }, "idx_training_sessions_learner");
+
+                    b.HasIndex(new[] { "LearnerId", "StartTime", "EndTime" }, "idx_training_sessions_learner_time");
+
+                    b.HasIndex(new[] { "Status" }, "idx_training_sessions_status");
+
+                    b.ToTable("training_sessions", null, t =>
+                        {
+                            t.HasComment("Training session schedule for bookings");
                         });
                 });
 
@@ -1232,6 +2180,115 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToView("v_published_posts", (string)null);
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.WithdrawalRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("admin_note");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<Guid?>("CoachPayoutAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_payout_account_id");
+
+                    b.Property<Guid>("CoachWalletId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_wallet_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'pending'::character varying")
+                        .HasComment("pending | approved | rejected | paid | cancelled");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("withdrawal_requests_pkey");
+
+                    b.HasIndex("CoachPayoutAccountId");
+
+                    b.HasIndex("CoachWalletId");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_withdrawal_requests_coach");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "idx_withdrawal_requests_created_at")
+                        .IsDescending();
+
+                    b.HasIndex(new[] { "Status" }, "idx_withdrawal_requests_status");
+
+                    b.ToTable("withdrawal_requests", null, t =>
+                        {
+                            t.HasComment("Withdrawal requests from coach wallet");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.Booking", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("Bookings")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_bookings_coach");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "Learner")
+                        .WithMany("BookingsAsLearner")
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bookings_learner");
+
+                    b.HasOne("SporticoApp.Core.Entities.TrainingPackage", "TrainingPackage")
+                        .WithMany("Bookings")
+                        .HasForeignKey("TrainingPackageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bookings_training_package");
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Learner");
+
+                    b.Navigation("TrainingPackage");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.ChatRoom", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.User", "User1")
@@ -1274,6 +2331,18 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("Package");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachPayoutAccount", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithOne("PayoutAccount")
+                        .HasForeignKey("SporticoApp.Core.Entities.CoachPayoutAccount", "CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coach_payout_accounts_coach");
+
+                    b.Navigation("Coach");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachProfile", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.User", "User")
@@ -1307,6 +2376,30 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("Sport");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachWallet", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithOne("Wallet")
+                        .HasForeignKey("SporticoApp.Core.Entities.CoachWallet", "CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coach_wallets_coach");
+
+                    b.Navigation("Coach");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachWalletTransaction", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachWallet", "Wallet")
+                        .WithMany("Transactions")
+                        .HasForeignKey("CoachWalletId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coach_wallet_transactions_wallet");
+
+                    b.Navigation("Wallet");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.Follow", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.User", "follower")
@@ -1326,6 +2419,36 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("follower");
 
                     b.Navigation("following");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.LearnerAssessment", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.Booking", "Booking")
+                        .WithOne("LearnerAssessment")
+                        .HasForeignKey("SporticoApp.Core.Entities.LearnerAssessment", "BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_learner_assessments_booking");
+
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("LearnerAssessments")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_learner_assessments_coach");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "Learner")
+                        .WithMany("LearnerAssessments")
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_learner_assessments_learner");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Learner");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.LearnerProfile", b =>
@@ -1442,6 +2565,36 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("Post");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.ProgressCheckIn", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.Booking", "Booking")
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_progress_check_ins_booking");
+
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("ProgressCheckIns")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_progress_check_ins_coach");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "Learner")
+                        .WithMany("ProgressCheckInsAsLearner")
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_progress_check_ins_learner");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Learner");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.RefreshToken", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.User", "User")
@@ -1503,6 +2656,123 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("learner");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPackage", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("TrainingPackages")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_packages_coach");
+
+                    b.HasOne("SporticoApp.Core.Entities.Sport", "Sport")
+                        .WithMany()
+                        .HasForeignKey("SportId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_packages_sport");
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Sport");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlan", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.Booking", "Booking")
+                        .WithOne("TrainingPlan")
+                        .HasForeignKey("SporticoApp.Core.Entities.TrainingPlan", "BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_plans_booking");
+
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("TrainingPlans")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_plans_coach");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "Learner")
+                        .WithMany("TrainingPlansAsLearner")
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_plans_learner");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Learner");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanDay", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.TrainingPlanWeek", "TrainingPlanWeek")
+                        .WithMany("Days")
+                        .HasForeignKey("TrainingPlanWeekId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_plan_days_week");
+
+                    b.Navigation("TrainingPlanWeek");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanExercise", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.TrainingPlanDay", "TrainingPlanDay")
+                        .WithMany("Exercises")
+                        .HasForeignKey("TrainingPlanDayId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_plan_exercises_day");
+
+                    b.Navigation("TrainingPlanDay");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanWeek", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.TrainingPlan", "TrainingPlan")
+                        .WithMany("Weeks")
+                        .HasForeignKey("TrainingPlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_plan_weeks_plan");
+
+                    b.Navigation("TrainingPlan");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingSession", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.Booking", "Booking")
+                        .WithMany("TrainingSessions")
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_sessions_booking");
+
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("TrainingSessions")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_sessions_coach");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "Learner")
+                        .WithMany("TrainingSessionsAsLearner")
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_training_sessions_learner");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("Learner");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.UserRole", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.Role", "Role")
@@ -1524,6 +2794,44 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.WithdrawalRequest", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("WithdrawalRequests")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_withdrawal_requests_coach");
+
+                    b.HasOne("SporticoApp.Core.Entities.CoachPayoutAccount", "PayoutAccount")
+                        .WithMany()
+                        .HasForeignKey("CoachPayoutAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_withdrawal_requests_payout_account");
+
+                    b.HasOne("SporticoApp.Core.Entities.CoachWallet", "Wallet")
+                        .WithMany()
+                        .HasForeignKey("CoachWalletId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_withdrawal_requests_wallet");
+
+                    b.Navigation("Coach");
+
+                    b.Navigation("PayoutAccount");
+
+                    b.Navigation("Wallet");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.Booking", b =>
+                {
+                    b.Navigation("LearnerAssessment");
+
+                    b.Navigation("TrainingPlan");
+
+                    b.Navigation("TrainingSessions");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.ChatRoom", b =>
                 {
                     b.Navigation("Messages");
@@ -1531,13 +2839,36 @@ namespace SporticoApp.Infrastructure.Migrations
 
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachProfile", b =>
                 {
+                    b.Navigation("Bookings");
+
                     b.Navigation("CoachPackages");
 
                     b.Navigation("CoachSports");
 
+                    b.Navigation("LearnerAssessments");
+
+                    b.Navigation("PayoutAccount");
+
                     b.Navigation("Posts");
 
+                    b.Navigation("ProgressCheckIns");
+
                     b.Navigation("Reviews");
+
+                    b.Navigation("TrainingPackages");
+
+                    b.Navigation("TrainingPlans");
+
+                    b.Navigation("TrainingSessions");
+
+                    b.Navigation("Wallet");
+
+                    b.Navigation("WithdrawalRequests");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachWallet", b =>
+                {
+                    b.Navigation("Transactions");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.Message", b =>
@@ -1574,8 +2905,30 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("Posts");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPackage", b =>
+                {
+                    b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlan", b =>
+                {
+                    b.Navigation("Weeks");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanDay", b =>
+                {
+                    b.Navigation("Exercises");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.TrainingPlanWeek", b =>
+                {
+                    b.Navigation("Days");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.User", b =>
                 {
+                    b.Navigation("BookingsAsLearner");
+
                     b.Navigation("ChatRoomsAsUser1");
 
                     b.Navigation("ChatRoomsAsUser2");
@@ -1586,6 +2939,8 @@ namespace SporticoApp.Infrastructure.Migrations
 
                     b.Navigation("FollowsAsFollowing");
 
+                    b.Navigation("LearnerAssessments");
+
                     b.Navigation("LearnerProfile");
 
                     b.Navigation("Messages");
@@ -1594,11 +2949,17 @@ namespace SporticoApp.Infrastructure.Migrations
 
                     b.Navigation("Payments");
 
+                    b.Navigation("ProgressCheckInsAsLearner");
+
                     b.Navigation("ReportsAsReporter");
 
                     b.Navigation("ReportsAsTargetUser");
 
                     b.Navigation("Reviews");
+
+                    b.Navigation("TrainingPlansAsLearner");
+
+                    b.Navigation("TrainingSessionsAsLearner");
 
                     b.Navigation("UserRoles");
                 });
