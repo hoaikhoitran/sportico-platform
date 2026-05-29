@@ -22,6 +22,38 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(x => x.Id == id);
         }
 
+        public async Task<TrainingPackage?> GetByIdWithCoachAsync(Guid id)
+        {
+            return await _context.TrainingPackages
+                .AsNoTracking()
+                .Include(x => x.Sport)
+                .Include(x => x.Coach)
+                    .ThenInclude(c => c.User)
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
+        public async Task<(List<TrainingPackage> Items, int TotalCount)> GetPagedWithCoachAsync(
+            TrainingPackageFilterRequest filter)
+        {
+            IQueryable<TrainingPackage> query = _context.TrainingPackages
+                .AsNoTracking()
+                .Include(x => x.Sport)
+                .Include(x => x.Coach)
+                    .ThenInclude(c => c.User);
+
+            query = ApplyFilter(query, filter);
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(x => x.CreatedAt)
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
         public async Task<TrainingPackage?> GetByIdForUpdateAsync(Guid id)
         {
             return await _context.TrainingPackages

@@ -17,6 +17,40 @@ public partial class CoachProfile
     public string? Headline { get; set; }
 
     /// <summary>
+    /// Banner/cover image URL for the coach profile (User.AvatarUrl remains the avatar).
+    /// </summary>
+    public string? CoverImageUrl { get; set; }
+
+    public string? TeachingAddress { get; set; }
+
+    public string? TeachingCity { get; set; }
+
+    public string? TeachingDistrict { get; set; }
+
+    public decimal? TeachingLatitude { get; set; }
+
+    public decimal? TeachingLongitude { get; set; }
+
+    public bool? IsOnlineAvailable { get; set; }
+
+    public bool? IsOfflineAvailable { get; set; }
+
+    /// <summary>
+    /// Short comma/line separated list, e.g. fat loss, muscle gain, football, badminton, rehab.
+    /// </summary>
+    public string? Specialties { get; set; }
+
+    public string? CertificationsSummary { get; set; }
+
+    public string? AchievementsSummary { get; set; }
+
+    public string? FacebookUrl { get; set; }
+
+    public string? InstagramUrl { get; set; }
+
+    public string? WebsiteUrl { get; set; }
+
+    /// <summary>
     /// Cache: trung bình Rating từ bảng Review
     /// </summary>
     public decimal Rating { get; set; }
@@ -55,6 +89,10 @@ public partial class CoachProfile
     public virtual CoachWallet? Wallet { get; set; }
 
     public virtual ICollection<WithdrawalRequest> WithdrawalRequests { get; set; } = new List<WithdrawalRequest>();
+
+    public virtual ICollection<CoachProfileMedia> Media { get; set; } = new List<CoachProfileMedia>();
+
+    public virtual ICollection<CoachTeachingLocation> TeachingLocations { get; set; } = new List<CoachTeachingLocation>();
 
     public virtual User User { get; set; } = null!;
 }

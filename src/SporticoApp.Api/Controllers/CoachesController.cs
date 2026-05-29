@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SporticoApp.Api.Extensions;
 using SporticoApp.Application.DTOs.Coaches;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Shared.Constants;
@@ -36,6 +37,27 @@ namespace SporticoApp.Api.Controllers
             }
 
             var result = await _coachService.RegisterCoachAsync(userId, request);
+            return Ok(result);
+        }
+
+        [HttpGet("me")]
+        [Authorize(Roles = RoleConstants.Coach)]
+        [ProducesResponseType(typeof(Result<CoachProfileResponse>), 200)]
+        public async Task<IActionResult> GetMyProfile()
+        {
+            var coachId = User.GetUserId();
+            var result = await _coachService.GetMyProfileAsync(coachId);
+            return Ok(result);
+        }
+
+        [HttpPut("me")]
+        [Authorize(Roles = RoleConstants.Coach)]
+        [ProducesResponseType(typeof(Result<CoachProfileResponse>), 200)]
+        public async Task<IActionResult> UpdateMyProfile(
+            [FromBody] UpdateCoachProfileRequest request)
+        {
+            var coachId = User.GetUserId();
+            var result = await _coachService.UpdateMyProfileAsync(coachId, request);
             return Ok(result);
         }
     }

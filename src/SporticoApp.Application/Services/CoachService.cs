@@ -23,19 +23,22 @@ namespace SporticoApp.Application.Services
         private readonly ICoachRepository _coachRepository;
         private readonly ISportRepository _sportRepository;
         private readonly IValidator<RegisterCoachRequest> _validator;
+        private readonly IValidator<UpdateCoachProfileRequest> _updateValidator;
 
         public CoachService(
             IUserRepository userRepository,
             IRoleRepository roleRepository,
             ICoachRepository coachRepository,
             ISportRepository sportRepository,
-            IValidator<RegisterCoachRequest> validator)
+            IValidator<RegisterCoachRequest> validator,
+            IValidator<UpdateCoachProfileRequest> updateValidator)
         {
             _userRepository = userRepository;
             _roleRepository = roleRepository;
             _coachRepository = coachRepository;
             _sportRepository = sportRepository;
             _validator = validator;
+            _updateValidator = updateValidator;
         }
 
         public async Task<Result<CoachProfileResponse>> RegisterCoachAsync(
@@ -122,6 +125,61 @@ namespace SporticoApp.Application.Services
                 coachProfile.ToResponse();
 
             return Result<CoachProfileResponse>.Success(response);
+        }
+
+        public async Task<Result<CoachProfileResponse>> GetMyProfileAsync(Guid coachId)
+        {
+            var coachProfile =
+                await _coachRepository.GetByUserIdWithDetailsAsync(coachId);
+
+            if (coachProfile == null)
+            {
+                throw new NotFoundException(
+                    ErrorCodes.CoachProfileNotFound,
+                    "Coach profile not found");
+            }
+
+            return Result<CoachProfileResponse>.Success(coachProfile.ToResponse());
+        }
+
+        public async Task<Result<CoachProfileResponse>> UpdateMyProfileAsync(
+            Guid coachId,
+            UpdateCoachProfileRequest request)
+        {
+            var validationResult =
+                await _updateValidator.ValidateAsync(request);
+
+            if (!validationResult.IsValid)
+            {
+                var details = validationResult.Errors
+                    .Select(x => x.ErrorMessage)
+                    .ToList();
+
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Invalid request data",
+                    details);
+            }
+
+            var coachProfile =
+                await _coachRepository.GetByUserIdForUpdateAsync(coachId);
+
+            if (coachProfile == null)
+            {
+                throw new NotFoundException(
+                    ErrorCodes.CoachProfileNotFound,
+                    "Coach profile not found");
+            }
+
+            coachProfile.ApplyUpdate(request);
+
+            await _coachRepository.SaveChangesAsync();
+
+            var updated =
+                await _coachRepository.GetByUserIdWithDetailsAsync(coachId);
+
+            return Result<CoachProfileResponse>.Success(
+                (updated ?? coachProfile).ToResponse());
         }
     }
 }

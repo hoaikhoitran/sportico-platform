@@ -13,5 +13,11 @@ namespace SporticoApp.Application.Interfaces.Services
         Task<Result<CoachProfileResponse>> RegisterCoachAsync(
             Guid userId,
             RegisterCoachRequest request);
+
+        Task<Result<CoachProfileResponse>> GetMyProfileAsync(Guid coachId);
+
+        Task<Result<CoachProfileResponse>> UpdateMyProfileAsync(
+            Guid coachId,
+            UpdateCoachProfileRequest request);
     }
 }

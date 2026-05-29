@@ -7,6 +7,11 @@ namespace SporticoApp.Application.Interfaces.Repositories
     {
         Task<TrainingPackage?> GetByIdAsync(Guid id);
 
+        Task<TrainingPackage?> GetByIdWithCoachAsync(Guid id);
+
+        Task<(List<TrainingPackage> Items, int TotalCount)> GetPagedWithCoachAsync(
+            TrainingPackageFilterRequest filter);
+
         Task<TrainingPackage?> GetByIdForUpdateAsync(Guid id);
 
         Task<TrainingPackage?> GetOwnedByIdAsync(Guid coachId, Guid id);

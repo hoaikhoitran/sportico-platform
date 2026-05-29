@@ -19,9 +19,15 @@ public partial class User
     public string? Phone { get; set; }
 
     public string? AvatarUrl { get; set; }
+
+    public DateTime? DateOfBirth { get; set; }
+
     public string? EmailVerificationToken { get; set; }
     public string? RefreshToken { get; set; }
     public DateTime? RefreshTokenExpiresAt { get; set; }
+
+    public string? PasswordResetToken { get; set; }
+    public DateTime? PasswordResetTokenExpiresAt { get; set; }
 
     /// <summary>
     /// active | inactive | banned | pending

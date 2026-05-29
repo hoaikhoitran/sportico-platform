@@ -53,6 +53,49 @@ namespace SporticoApp.Application.Mappings
             trainingPackage.UpdatedAt = DateTime.UtcNow;
         }
 
+        public static PublicTrainingPackageResponse ToPublicResponse(
+            this TrainingPackage trainingPackage)
+        {
+            return new PublicTrainingPackageResponse
+            {
+                Id = trainingPackage.Id,
+                CoachId = trainingPackage.CoachId,
+                SportId = trainingPackage.SportId,
+                SportName = trainingPackage.Sport?.Name ?? string.Empty,
+                Title = trainingPackage.Title,
+                Description = trainingPackage.Description,
+                Price = trainingPackage.Price,
+                SessionCount = trainingPackage.SessionCount,
+                DurationDays = trainingPackage.DurationDays,
+                Location = trainingPackage.Location,
+                IsOnline = trainingPackage.IsOnline,
+                Level = trainingPackage.Level,
+                GoalType = trainingPackage.GoalType,
+                Status = trainingPackage.Status,
+                CreatedAt = trainingPackage.CreatedAt,
+                UpdatedAt = trainingPackage.UpdatedAt,
+                Coach = trainingPackage.Coach == null
+                    ? null
+                    : new PublicCoachSummaryResponse
+                    {
+                        CoachId = trainingPackage.CoachId,
+                        FullName = trainingPackage.Coach.User?.FullName ?? string.Empty,
+                        AvatarUrl = trainingPackage.Coach.User?.AvatarUrl,
+                        Headline = trainingPackage.Coach.Headline,
+                        Bio = trainingPackage.Coach.Bio,
+                        ExperienceYears = trainingPackage.Coach.ExperienceYears,
+                        CoverImageUrl = trainingPackage.Coach.CoverImageUrl,
+                        TeachingCity = trainingPackage.Coach.TeachingCity,
+                        TeachingDistrict = trainingPackage.Coach.TeachingDistrict,
+                        IsOnlineAvailable = trainingPackage.Coach.IsOnlineAvailable,
+                        IsOfflineAvailable = trainingPackage.Coach.IsOfflineAvailable,
+                        Specialties = trainingPackage.Coach.Specialties,
+                        Rating = trainingPackage.Coach.Rating,
+                        TotalReviews = trainingPackage.Coach.TotalReviews
+                    }
+            };
+        }
+
         public static TrainingPackageResponse ToResponse(
             this TrainingPackage trainingPackage)
         {

@@ -11,7 +11,10 @@ namespace SporticoApp.Application
         public static IServiceCollection AddApplicationDI(this IServiceCollection services)
         {
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IUserProfileService, UserProfileService>();
             services.AddScoped<ICoachService, CoachService>();
+            services.AddScoped<ICoachProfileMediaService, CoachProfileMediaService>();
+            services.AddScoped<ICoachTeachingLocationService, CoachTeachingLocationService>();
             services.AddScoped<ICoachPackageService, CoachPackageService>();
             services.AddScoped<IPackageService, PackageService>();
             services.AddScoped<IPostService, PostService>();

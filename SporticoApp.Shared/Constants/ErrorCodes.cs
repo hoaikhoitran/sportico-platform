@@ -24,12 +24,33 @@ namespace SporticoApp.Shared.Constants
         public const string InvalidVerificationToken =
             "AUTH_INVALID_VERIFICATION_TOKEN";
 
+        public const string InvalidPasswordResetToken =
+            "AUTH_INVALID_PASSWORD_RESET_TOKEN";
+
+        public const string PasswordResetTokenExpired =
+            "AUTH_PASSWORD_RESET_TOKEN_EXPIRED";
+
+        public const string InvalidCurrentPassword =
+            "AUTH_INVALID_CURRENT_PASSWORD";
+
+        public const string EmailAlreadyVerified =
+            "AUTH_EMAIL_ALREADY_VERIFIED";
+
         // User
         public const string UserNotFound =
             "USER_NOT_FOUND";
 
         public const string EmailAlreadyExists =
             "USER_EMAIL_ALREADY_EXISTS";
+
+        public const string ProfileUpdateFailed =
+            "USER_PROFILE_UPDATE_FAILED";
+
+        public const string InvalidImageUrl =
+            "USER_INVALID_IMAGE_URL";
+
+        public const string DateOfBirthInvalid =
+            "USER_DATE_OF_BIRTH_INVALID";
 
         // Common
         public const string ValidationError =
@@ -59,6 +80,16 @@ namespace SporticoApp.Shared.Constants
             "COACH_PROFILE_NOT_FOUND";
         public const string CoachPackageNotFound =
             "COACH_PACKAGE_NOT_FOUND";
+        public const string CoachProfileMediaNotFound =
+            "COACH_PROFILE_MEDIA_NOT_FOUND";
+        public const string CoachProfileMediaNotOwned =
+            "COACH_PROFILE_MEDIA_NOT_OWNED";
+        public const string InvalidCoachProfileMediaType =
+            "COACH_PROFILE_MEDIA_INVALID_TYPE";
+        public const string CoachTeachingLocationNotFound =
+            "COACH_TEACHING_LOCATION_NOT_FOUND";
+        public const string CoachTeachingLocationNotOwned =
+            "COACH_TEACHING_LOCATION_NOT_OWNED";
 
         // Sport
         public const string InvalidSport =

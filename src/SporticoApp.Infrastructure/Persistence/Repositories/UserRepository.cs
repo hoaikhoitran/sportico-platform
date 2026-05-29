@@ -23,6 +23,17 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public Task AddWithoutSaveAsync(User user)
+        {
+            _context.Users.Add(user);
+            return Task.CompletedTask;
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            await _context.SaveChangesAsync();
+        }
+
         public async Task<User?> GetByEmailAsync(string email)
         {
             return await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -43,6 +54,14 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                     x => x.EmailVerificationToken == token);
         }
 
+        public async Task<User?> GetByPasswordResetTokenAsync(
+            string token)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(
+                    x => x.PasswordResetToken == token);
+        }
+
         public async Task UpdateAsync(User user)
         {
             _context.Users.Update(user);
@@ -53,6 +72,23 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             return await _context.Users
                 .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
+        public async Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .Include(u => u.CoachProfile)
+                .Include(u => u.LearnerProfile)
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
+        public async Task<User?> GetByIdForUpdateAsync(Guid id)
+        {
+            return await _context.Users
                 .FirstOrDefaultAsync(x => x.Id == id);
         }
     }

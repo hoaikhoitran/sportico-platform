@@ -33,6 +33,8 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IUserRoleRepository, UserRoleRepository>();
             services.AddScoped<ICoachRepository, CoachRepository>();
+            services.AddScoped<ICoachProfileMediaRepository, CoachProfileMediaRepository>();
+            services.AddScoped<ICoachTeachingLocationRepository, CoachTeachingLocationRepository>();
             services.AddScoped<ISportRepository, SportRepository>();
             services.AddScoped<IPackageRepository, PackageRepository>();
             services.AddScoped<ICoachPackageRepository, CoachPackageRepository>();
@@ -54,6 +56,7 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             services.AddScoped<IEmailService, EmailService>();
+            services.AddSingleton<IEmailTemplateService, EmailTemplateService>();
             services.AddSingleton<ISlugGenerator, SlugGenerator>();
 
             services.AddHttpClient<IPayOsService, PayOsService>((sp, client) =>

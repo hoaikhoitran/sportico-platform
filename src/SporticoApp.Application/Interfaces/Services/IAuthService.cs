@@ -14,5 +14,9 @@ namespace SporticoApp.Application.Interfaces.Services
         Task<Result> RegisterAsync(RegisterRequest request);
         Task<Result> VerifyEmailAsync(string token);
         Task<Result<RefreshTokenResponse>> RefreshTokenAsync(RefreshTokenRequest request);
+        Task<Result> ForgotPasswordAsync(ForgotPasswordRequest request);
+        Task<Result> ResetPasswordAsync(ResetPasswordRequest request);
+        Task<Result> ChangePasswordAsync(Guid userId, ChangePasswordRequest request);
+        Task<Result> ResendVerificationEmailAsync(ResendVerificationEmailRequest request);
     }
 }

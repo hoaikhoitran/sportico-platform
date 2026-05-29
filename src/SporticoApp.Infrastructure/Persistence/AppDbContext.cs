@@ -19,6 +19,8 @@ public class AppDbContext : DbContext
     public DbSet<CoachWalletTransaction> CoachWalletTransactions => Set<CoachWalletTransaction>();
     public DbSet<CoachPackage> CoachPackages => Set<CoachPackage>();
     public DbSet<CoachProfile> CoachProfiles => Set<CoachProfile>();
+    public DbSet<CoachProfileMedia> CoachProfileMedia => Set<CoachProfileMedia>();
+    public DbSet<CoachTeachingLocation> CoachTeachingLocations => Set<CoachTeachingLocation>();
     public DbSet<CoachSport> CoachSports => Set<CoachSport>();
     public DbSet<Follow> Follows => Set<Follow>();
     public DbSet<LearnerAssessment> LearnerAssessments => Set<LearnerAssessment>();

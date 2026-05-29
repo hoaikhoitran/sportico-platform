@@ -10,5 +10,7 @@ namespace SporticoApp.Application.Interfaces.Repositories
     public interface IUserRoleRepository
     {
         Task AddAsync(UserRole userRole);
+
+        Task AddWithoutSaveAsync(UserRole userRole);
     }
 }

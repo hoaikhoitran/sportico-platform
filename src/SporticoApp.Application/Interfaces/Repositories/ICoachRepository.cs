@@ -13,6 +13,12 @@ namespace SporticoApp.Application.Interfaces.Repositories
 
         Task<CoachProfile?> GetByUserIdAsync(Guid userId);
 
+        Task<CoachProfile?> GetByUserIdWithDetailsAsync(Guid userId);
+
+        Task<CoachProfile?> GetByUserIdForUpdateAsync(Guid userId);
+
+        Task SaveChangesAsync();
+
         Task CreateCoachProfileAsync(
             CoachProfile coachProfile,
             int coachRoleId,

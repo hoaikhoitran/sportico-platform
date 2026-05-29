@@ -312,9 +312,24 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
+                    b.Property<string>("AchievementsSummary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("achievements_summary");
+
                     b.Property<string>("Bio")
                         .HasColumnType("text")
                         .HasColumnName("bio");
+
+                    b.Property<string>("CertificationsSummary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("certifications_summary");
+
+                    b.Property<string>("CoverImageUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("cover_image_url");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -328,10 +343,28 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("experience_years");
 
+                    b.Property<string>("FacebookUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("facebook_url");
+
                     b.Property<string>("Headline")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("headline");
+
+                    b.Property<string>("InstagramUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("instagram_url");
+
+                    b.Property<bool?>("IsOfflineAvailable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_offline_available");
+
+                    b.Property<bool?>("IsOnlineAvailable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_online_available");
 
                     b.Property<decimal>("Rating")
                         .ValueGeneratedOnAdd()
@@ -340,6 +373,36 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("rating")
                         .HasDefaultValueSql("0.00")
                         .HasComment("Cache: trung bình rating từ bảng reviews");
+
+                    b.Property<string>("Specialties")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("specialties");
+
+                    b.Property<string>("TeachingAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("teaching_address");
+
+                    b.Property<string>("TeachingCity")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("teaching_city");
+
+                    b.Property<string>("TeachingDistrict")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("teaching_district");
+
+                    b.Property<decimal?>("TeachingLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("teaching_latitude");
+
+                    b.Property<decimal?>("TeachingLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("teaching_longitude");
 
                     b.Property<int>("TotalReviews")
                         .ValueGeneratedOnAdd()
@@ -354,6 +417,11 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("WebsiteUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("website_url");
+
                     b.HasKey("UserId")
                         .HasName("coach_profiles_pkey");
 
@@ -363,6 +431,71 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToTable("coach_profiles", null, t =>
                         {
                             t.HasComment("Hồ sơ huấn luyện viên");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachProfileMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("media_type");
+
+                    b.Property<string>("MediaUrl")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("media_url");
+
+                    b.Property<int>("OrderIndex")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("order_index");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("coach_profile_media_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_coach_profile_media_coach");
+
+                    b.HasIndex(new[] { "MediaType" }, "idx_coach_profile_media_type");
+
+                    b.ToTable("coach_profile_media", null, t =>
+                        {
+                            t.HasComment("Media (image URLs) cho hồ sơ huấn luyện viên: certificate/award/gallery");
                         });
                 });
 
@@ -390,6 +523,73 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToTable("coach_sports", null, t =>
                         {
                             t.HasComment("Many-to-many: coach dạy những môn nào");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachTeachingLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("city");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("District")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("district");
+
+                    b.Property<bool>("IsDefault")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_default");
+
+                    b.Property<decimal?>("Latitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("latitude");
+
+                    b.Property<decimal?>("Longitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("longitude");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("coach_teaching_locations_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_coach_teaching_locations_coach");
+
+                    b.ToTable("coach_teaching_locations", null, t =>
+                        {
+                            t.HasComment("Các địa điểm dạy offline của huấn luyện viên");
                         });
                 });
 
@@ -1947,6 +2147,10 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<DateTime?>("DateOfBirth")
+                        .HasColumnType("date")
+                        .HasColumnName("date_of_birth");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("citext")
@@ -1967,6 +2171,15 @@ namespace SporticoApp.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
+
+                    b.Property<string>("PasswordResetToken")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("password_reset_token");
+
+                    b.Property<DateTime?>("PasswordResetTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("password_reset_token_expires_at");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
@@ -2355,6 +2568,18 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachProfileMedia", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("Media")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coach_profile_media_coach");
+
+                    b.Navigation("Coach");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachSport", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
@@ -2374,6 +2599,18 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("Coach");
 
                     b.Navigation("Sport");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachTeachingLocation", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany("TeachingLocations")
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coach_teaching_locations_coach");
+
+                    b.Navigation("Coach");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachWallet", b =>
@@ -2847,6 +3084,8 @@ namespace SporticoApp.Infrastructure.Migrations
 
                     b.Navigation("LearnerAssessments");
 
+                    b.Navigation("Media");
+
                     b.Navigation("PayoutAccount");
 
                     b.Navigation("Posts");
@@ -2854,6 +3093,8 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("ProgressCheckIns");
 
                     b.Navigation("Reviews");
+
+                    b.Navigation("TeachingLocations");
 
                     b.Navigation("TrainingPackages");
 

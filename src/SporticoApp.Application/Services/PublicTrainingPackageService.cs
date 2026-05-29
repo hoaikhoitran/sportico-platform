@@ -24,7 +24,7 @@ namespace SporticoApp.Application.Services
             _filterValidator = filterValidator;
         }
 
-        public async Task<Result<PagedResult<TrainingPackageResponse>>> GetPagedAsync(
+        public async Task<Result<PagedResult<PublicTrainingPackageResponse>>> GetPagedAsync(
             TrainingPackageFilterRequest filter)
         {
             var validationResult = await _filterValidator.ValidateAsync(filter);
@@ -42,20 +42,20 @@ namespace SporticoApp.Application.Services
 
             filter.Status = TrainingPackageStatuses.Published;
 
-            var (items, totalCount) = await _trainingPackageRepository.GetPagedAsync(filter);
+            var (items, totalCount) = await _trainingPackageRepository.GetPagedWithCoachAsync(filter);
 
-            var response = new PagedResult<TrainingPackageResponse>(
-                items.Select(x => x.ToResponse()).ToList(),
+            var response = new PagedResult<PublicTrainingPackageResponse>(
+                items.Select(x => x.ToPublicResponse()).ToList(),
                 totalCount,
                 filter.PageNumber,
                 filter.PageSize);
 
-            return Result<PagedResult<TrainingPackageResponse>>.Success(response);
+            return Result<PagedResult<PublicTrainingPackageResponse>>.Success(response);
         }
 
-        public async Task<Result<TrainingPackageResponse>> GetByIdAsync(Guid id)
+        public async Task<Result<PublicTrainingPackageResponse>> GetByIdAsync(Guid id)
         {
-            var trainingPackage = await _trainingPackageRepository.GetByIdAsync(id);
+            var trainingPackage = await _trainingPackageRepository.GetByIdWithCoachAsync(id);
 
             if (trainingPackage == null)
             {
@@ -71,7 +71,7 @@ namespace SporticoApp.Application.Services
                     "Training package is not published");
             }
 
-            return Result<TrainingPackageResponse>.Success(trainingPackage.ToResponse());
+            return Result<PublicTrainingPackageResponse>.Success(trainingPackage.ToPublicResponse());
         }
     }
 }

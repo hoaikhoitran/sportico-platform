@@ -19,7 +19,7 @@ namespace SporticoApp.Api.Controllers
         }
 
         [HttpGet]
-        [ProducesResponseType(typeof(Result<PagedResult<TrainingPackageResponse>>), 200)]
+        [ProducesResponseType(typeof(Result<PagedResult<PublicTrainingPackageResponse>>), 200)]
         public async Task<IActionResult> GetPaged([FromQuery] TrainingPackageFilterRequest filter)
         {
             var result = await _trainingPackageService.GetPagedAsync(filter);
@@ -27,7 +27,7 @@ namespace SporticoApp.Api.Controllers
         }
 
         [HttpGet("{id:guid}")]
-        [ProducesResponseType(typeof(Result<TrainingPackageResponse>), 200)]
+        [ProducesResponseType(typeof(Result<PublicTrainingPackageResponse>), 200)]
         public async Task<IActionResult> GetById(Guid id)
         {
             var result = await _trainingPackageService.GetByIdAsync(id);

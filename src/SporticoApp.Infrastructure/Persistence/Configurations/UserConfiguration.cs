@@ -28,6 +28,14 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasMaxLength(255);
         builder.Property(e => e.RefreshTokenExpiresAt)
             .HasColumnName("refresh_token_expires_at");
+        builder.Property(e => e.PasswordResetToken)
+            .HasColumnName("password_reset_token")
+            .HasMaxLength(255);
+        builder.Property(e => e.PasswordResetTokenExpiresAt)
+            .HasColumnName("password_reset_token_expires_at");
+        builder.Property(e => e.DateOfBirth)
+            .HasColumnName("date_of_birth")
+            .HasColumnType("date");
         builder.Property(e => e.FullName).HasMaxLength(150);
         builder.Property(e => e.Phone).HasMaxLength(20);
         builder.Property(e => e.Status)

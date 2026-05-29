@@ -18,6 +18,46 @@ public sealed class CoachProfileConfiguration : IEntityTypeConfiguration<CoachPr
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(e => e.ExperienceYears).HasDefaultValue(0);
         builder.Property(e => e.Headline).HasMaxLength(255);
+        builder.Property(e => e.CoverImageUrl)
+            .HasColumnName("cover_image_url")
+            .HasMaxLength(1000);
+        builder.Property(e => e.TeachingAddress)
+            .HasColumnName("teaching_address")
+            .HasMaxLength(500);
+        builder.Property(e => e.TeachingCity)
+            .HasColumnName("teaching_city")
+            .HasMaxLength(100);
+        builder.Property(e => e.TeachingDistrict)
+            .HasColumnName("teaching_district")
+            .HasMaxLength(100);
+        builder.Property(e => e.TeachingLatitude)
+            .HasColumnName("teaching_latitude")
+            .HasPrecision(9, 6);
+        builder.Property(e => e.TeachingLongitude)
+            .HasColumnName("teaching_longitude")
+            .HasPrecision(9, 6);
+        builder.Property(e => e.IsOnlineAvailable)
+            .HasColumnName("is_online_available");
+        builder.Property(e => e.IsOfflineAvailable)
+            .HasColumnName("is_offline_available");
+        builder.Property(e => e.Specialties)
+            .HasColumnName("specialties")
+            .HasMaxLength(1000);
+        builder.Property(e => e.CertificationsSummary)
+            .HasColumnName("certifications_summary")
+            .HasMaxLength(2000);
+        builder.Property(e => e.AchievementsSummary)
+            .HasColumnName("achievements_summary")
+            .HasMaxLength(2000);
+        builder.Property(e => e.FacebookUrl)
+            .HasColumnName("facebook_url")
+            .HasMaxLength(1000);
+        builder.Property(e => e.InstagramUrl)
+            .HasColumnName("instagram_url")
+            .HasMaxLength(1000);
+        builder.Property(e => e.WebsiteUrl)
+            .HasColumnName("website_url")
+            .HasMaxLength(1000);
         builder.Property(e => e.Rating)
             .HasPrecision(3, 2)
             .HasDefaultValueSql("0.00")

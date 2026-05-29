@@ -32,6 +32,26 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(x => x.UserId == userId);
         }
 
+        public async Task<CoachProfile?> GetByUserIdWithDetailsAsync(Guid userId)
+        {
+            return await _context.CoachProfiles
+                .AsNoTracking()
+                .Include(x => x.Media)
+                .Include(x => x.TeachingLocations)
+                .FirstOrDefaultAsync(x => x.UserId == userId);
+        }
+
+        public async Task<CoachProfile?> GetByUserIdForUpdateAsync(Guid userId)
+        {
+            return await _context.CoachProfiles
+                .FirstOrDefaultAsync(x => x.UserId == userId);
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            await _context.SaveChangesAsync();
+        }
+
         public async Task CreateCoachProfileAsync(
             CoachProfile coachProfile,
             int coachRoleId,

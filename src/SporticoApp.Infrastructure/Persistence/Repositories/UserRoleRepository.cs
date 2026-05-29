@@ -23,5 +23,11 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             _context.UserRoles.Add(userRole);
             await _context.SaveChangesAsync();
         }
+
+        public Task AddWithoutSaveAsync(UserRole userRole)
+        {
+            _context.UserRoles.Add(userRole);
+            return Task.CompletedTask;
+        }
     }
 }

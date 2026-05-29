@@ -5,9 +5,9 @@ namespace SporticoApp.Application.Interfaces.Services
 {
     public interface IPublicTrainingPackageService
     {
-        Task<Result<PagedResult<TrainingPackageResponse>>> GetPagedAsync(
+        Task<Result<PagedResult<PublicTrainingPackageResponse>>> GetPagedAsync(
             TrainingPackageFilterRequest filter);
 
-        Task<Result<TrainingPackageResponse>> GetByIdAsync(Guid id);
+        Task<Result<PublicTrainingPackageResponse>> GetByIdAsync(Guid id);
     }
 }
