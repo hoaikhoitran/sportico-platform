@@ -3,6 +3,7 @@ using SporticoApp.Application.DTOs.Withdrawals;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
 using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Exceptions;
 
 namespace SporticoApp.Infrastructure.Persistence.Repositories
 {
@@ -83,7 +84,19 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
 
         public async Task SaveChangesAsync()
         {
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // CoachWallet uses xmin optimistic concurrency; two concurrent withdrawals for
+                // the same coach will collide here. Surface it as ConflictException so the
+                // Application layer can return a 409 without referencing EF Core directly.
+                throw new ConflictException(
+                    ErrorCodes.InsufficientWalletBalance,
+                    "A concurrent withdrawal was processed. Please check your balance and try again.");
+            }
         }
 
         private static IQueryable<WithdrawalRequest> ApplyFilter(

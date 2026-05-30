@@ -15,28 +15,83 @@ namespace SporticoApp.Application.Services
     public class ChatService : IChatService
     {
         private readonly IChatRepository _chatRepository;
-        private readonly IBookingRepository _bookingRepository;
+        private readonly ICoachRepository _coachRepository;
+        private readonly INotificationRepository _notificationRepository;
+        private readonly IValidator<CreateChatRoomRequest> _createRoomValidator;
         private readonly IValidator<ChatMessageFilterRequest> _filterValidator;
         private readonly IValidator<SendMessageRequest> _sendValidator;
 
         public ChatService(
             IChatRepository chatRepository,
-            IBookingRepository bookingRepository,
+            ICoachRepository coachRepository,
+            INotificationRepository notificationRepository,
+            IValidator<CreateChatRoomRequest> createRoomValidator,
             IValidator<ChatMessageFilterRequest> filterValidator,
             IValidator<SendMessageRequest> sendValidator)
         {
             _chatRepository = chatRepository;
-            _bookingRepository = bookingRepository;
+            _coachRepository = coachRepository;
+            _notificationRepository = notificationRepository;
+            _createRoomValidator = createRoomValidator;
             _filterValidator = filterValidator;
             _sendValidator = sendValidator;
+        }
+
+        public async Task<Result<ChatRoomResponse>> CreateOrGetRoomAsync(Guid userId, CreateChatRoomRequest request)
+        {
+            var validationResult = await _createRoomValidator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+            {
+                var details = validationResult.Errors
+                    .Select(x => x.ErrorMessage)
+                    .ToList();
+
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Invalid request data",
+                    details);
+            }
+
+            if (request.CoachId == userId)
+            {
+                throw new ForbiddenException(
+                    ErrorCodes.Forbidden,
+                    "You cannot open a chat room with yourself");
+            }
+
+            var coachExists = await _coachRepository.ExistsByUserIdAsync(request.CoachId);
+            if (!coachExists)
+            {
+                throw new NotFoundException(
+                    ErrorCodes.CoachProfileNotFound,
+                    "Coach not found");
+            }
+
+            var existing = await _chatRepository.GetRoomByUsersAsync(userId, request.CoachId);
+            if (existing != null)
+            {
+                return Result<ChatRoomResponse>.Success(existing.ToResponse());
+            }
+
+            var user1Id = userId.CompareTo(request.CoachId) <= 0 ? userId : request.CoachId;
+            var user2Id = userId.CompareTo(request.CoachId) <= 0 ? request.CoachId : userId;
+
+            var room = new ChatRoom
+            {
+                Id = Guid.NewGuid(),
+                User1Id = user1Id,
+                User2Id = user2Id,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var saved = await _chatRepository.AddRoomAsync(room);
+            return Result<ChatRoomResponse>.Success(saved.ToResponse());
         }
 
         public async Task<Result<List<ChatRoomResponse>>> GetRoomsAsync(Guid userId)
         {
             var rooms = await _chatRepository.GetRoomsForUserAsync(userId);
-
             var response = rooms.Select(x => x.ToResponse()).ToList();
-
             return Result<List<ChatRoomResponse>>.Success(response);
         }
 
@@ -70,10 +125,8 @@ namespace SporticoApp.Application.Services
             {
                 throw new ForbiddenException(
                     ErrorCodes.ChatNotAllowed,
-                    "Chat is not allowed");
+                    "You are not a participant of this chat room");
             }
-
-            await EnsureChatAllowedAsync(room.User1Id, room.User2Id);
 
             var (items, totalCount) = await _chatRepository.GetMessagesByRoomAsync(roomId, filter);
 
@@ -116,10 +169,8 @@ namespace SporticoApp.Application.Services
             {
                 throw new ForbiddenException(
                     ErrorCodes.ChatNotAllowed,
-                    "Chat is not allowed");
+                    "You are not a participant of this chat room");
             }
-
-            await EnsureChatAllowedAsync(room.User1Id, room.User2Id);
 
             var message = new Message
             {
@@ -133,22 +184,25 @@ namespace SporticoApp.Application.Services
 
             await _chatRepository.AddMessageAsync(message);
 
-            return Result<ChatMessageResponse>.Success(message.ToResponse());
-        }
+            // Notify the OTHER participant — never the sender.
+            var receiverId = room.User1Id == userId ? room.User2Id : room.User1Id;
+            var preview = message.Content.Length > 80
+                ? message.Content[..80] + "…"
+                : message.Content;
 
-        private async Task EnsureChatAllowedAsync(Guid user1Id, Guid user2Id)
-        {
-            // Room participants are stored ordered by GUID, not as (learner, coach),
-            // so check both orderings against the booking's (LearnerId, CoachId).
-            var booking =
-                await _bookingRepository.GetActiveOrCompletedBetweenUsersAsync(user1Id, user2Id)
-                ?? await _bookingRepository.GetActiveOrCompletedBetweenUsersAsync(user2Id, user1Id);
-            if (booking == null)
+            await _notificationRepository.AddWithoutSaveAsync(new Notification
             {
-                throw new ForbiddenException(
-                    ErrorCodes.ChatNotAllowed,
-                    "Chat is not allowed without an active booking");
-            }
+                Id = Guid.NewGuid(),
+                UserId = receiverId,
+                Title = "New message",
+                Content = preview,
+                Type = NotificationTypeConstants.Message,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _notificationRepository.SaveChangesAsync();
+
+            return Result<ChatMessageResponse>.Success(message.ToResponse());
         }
     }
 }

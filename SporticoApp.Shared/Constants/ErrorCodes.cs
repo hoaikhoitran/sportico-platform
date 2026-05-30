@@ -151,6 +151,9 @@ namespace SporticoApp.Shared.Constants
         public const string SessionLimitExceeded =
             "SESSION_LIMIT_EXCEEDED";
 
+        public const string InvalidTrainingPlanStatus =
+            "INVALID_TRAINING_PLAN_STATUS";
+
         // Training session
         public const string TrainingSessionNotFound =
             "TRAINING_SESSION_NOT_FOUND";

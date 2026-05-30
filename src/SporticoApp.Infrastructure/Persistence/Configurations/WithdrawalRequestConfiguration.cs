@@ -25,6 +25,13 @@ public sealed class WithdrawalRequestConfiguration : IEntityTypeConfiguration<Wi
             .HasDefaultValueSql("'pending'::character varying")
             .HasComment("pending | approved | rejected | paid | cancelled");
         builder.Property(e => e.AdminNote).HasMaxLength(1000);
+        builder.Property(e => e.PayOsPayoutId).HasMaxLength(100).IsRequired(false);
+        builder.Property(e => e.PayOsReferenceId).HasMaxLength(100).IsRequired(false);
+        builder.Property(e => e.PayOsPayoutStatus).HasMaxLength(50).IsRequired(false);
+        builder.Property(e => e.PayOsRawResponse).IsRequired(false);
+        builder.Property(e => e.FailureReason).HasMaxLength(2000).IsRequired(false);
+        builder.Property(e => e.ProcessingAt).IsRequired(false);
+        builder.Property(e => e.PaidAt).IsRequired(false);
 
         builder.HasOne(d => d.Coach)
             .WithMany(p => p.WithdrawalRequests)

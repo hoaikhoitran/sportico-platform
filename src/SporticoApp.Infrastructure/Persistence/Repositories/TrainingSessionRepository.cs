@@ -69,6 +69,48 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .AnyAsync(x => startTime < x.EndTime && endTime > x.StartTime);
         }
 
+        public async Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByLearnerAsync(
+            Guid learnerId,
+            TrainingSessionFilterRequest filter)
+        {
+            IQueryable<TrainingSession> query = _context.TrainingSessions
+                .AsNoTracking()
+                .Where(x => x.LearnerId == learnerId);
+
+            query = ApplyFilter(query, filter);
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(x => x.StartTime)
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
+        public async Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByCoachAsync(
+            Guid coachId,
+            TrainingSessionFilterRequest filter)
+        {
+            IQueryable<TrainingSession> query = _context.TrainingSessions
+                .AsNoTracking()
+                .Where(x => x.CoachId == coachId);
+
+            query = ApplyFilter(query, filter);
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(x => x.StartTime)
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
         public async Task AddAsync(TrainingSession session)
         {
             _context.TrainingSessions.Add(session);

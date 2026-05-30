@@ -27,6 +27,13 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(x => x.CoachId == coachId);
         }
 
+        public async Task<CoachPayoutAccount?> GetByIdAsync(Guid id)
+        {
+            return await _context.CoachPayoutAccounts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
         public async Task<CoachPayoutAccount?> GetByIdForUpdateAsync(Guid id)
         {
             return await _context.CoachPayoutAccounts

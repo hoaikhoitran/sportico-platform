@@ -20,6 +20,7 @@ public sealed class CoachPayoutAccountConfiguration : IEntityTypeConfiguration<C
         builder.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
         builder.Property(e => e.PayoutMethod).HasMaxLength(50);
         builder.Property(e => e.BankName).HasMaxLength(255);
+        builder.Property(e => e.BankBin).HasMaxLength(10);
         builder.Property(e => e.BankAccountNumber).HasMaxLength(50);
         builder.Property(e => e.BankAccountHolder).HasMaxLength(255);
         builder.Property(e => e.Status)

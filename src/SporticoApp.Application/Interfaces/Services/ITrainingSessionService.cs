@@ -27,5 +27,13 @@ namespace SporticoApp.Application.Interfaces.Services
         Task<Result<TrainingSessionResponse>> CompleteAsync(
             Guid coachId,
             Guid sessionId);
+
+        Task<Result<PagedResult<TrainingSessionResponse>>> GetMySessionsAsLearnerAsync(
+            Guid learnerId,
+            TrainingSessionFilterRequest filter);
+
+        Task<Result<PagedResult<TrainingSessionResponse>>> GetMySessionsAsCoachAsync(
+            Guid coachId,
+            TrainingSessionFilterRequest filter);
     }
 }

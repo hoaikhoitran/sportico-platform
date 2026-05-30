@@ -65,10 +65,29 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return (items, totalCount);
         }
 
-        public async Task AddRoomAsync(ChatRoom room)
+        public async Task<ChatRoom> AddRoomAsync(ChatRoom room)
         {
             _context.ChatRooms.Add(room);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+                return room;
+            }
+            catch (DbUpdateException)
+            {
+                // A concurrent request created the room between our SELECT and INSERT.
+                // Detach the failed entity and fall back to the existing row.
+                _context.Entry(room).State = EntityState.Detached;
+
+                var existing = await _context.ChatRooms
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.User1Id == room.User1Id && x.User2Id == room.User2Id);
+
+                if (existing != null)
+                    return existing;
+
+                throw;
+            }
         }
 
         public async Task AddMessageAsync(Message message)

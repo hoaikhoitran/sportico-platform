@@ -77,5 +77,25 @@ namespace SporticoApp.Api.Controllers
             var result = await _trainingSessionService.CompleteAsync(coachId, id);
             return Ok(result);
         }
+
+        [HttpGet("api/learners/me/training-sessions")]
+        [Authorize(Roles = RoleConstants.Learner)]
+        [ProducesResponseType(typeof(Result<PagedResult<TrainingSessionResponse>>), 200)]
+        public async Task<IActionResult> GetMySessionsAsLearner([FromQuery] TrainingSessionFilterRequest filter)
+        {
+            var learnerId = User.GetUserId();
+            var result = await _trainingSessionService.GetMySessionsAsLearnerAsync(learnerId, filter);
+            return Ok(result);
+        }
+
+        [HttpGet("api/coaches/me/training-sessions")]
+        [Authorize(Roles = RoleConstants.Coach)]
+        [ProducesResponseType(typeof(Result<PagedResult<TrainingSessionResponse>>), 200)]
+        public async Task<IActionResult> GetMySessionsAsCoach([FromQuery] TrainingSessionFilterRequest filter)
+        {
+            var coachId = User.GetUserId();
+            var result = await _trainingSessionService.GetMySessionsAsCoachAsync(coachId, filter);
+            return Ok(result);
+        }
     }
 }

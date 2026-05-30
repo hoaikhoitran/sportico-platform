@@ -25,6 +25,7 @@ namespace SporticoApp.Application.Mappings
                 PaidAt = booking.PaidAt,
                 CompletedAt = booking.CompletedAt,
                 CancelledAt = booking.CancelledAt,
+                ExpiresAt = booking.ExpiresAt,
                 CreatedAt = booking.CreatedAt,
                 UpdatedAt = booking.UpdatedAt
             };

@@ -3,6 +3,7 @@ using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
 using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Exceptions;
 
 namespace SporticoApp.Infrastructure.Persistence.Repositories
 {
@@ -158,7 +159,18 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
 
         public async Task SaveChangesAsync()
         {
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // CoachWallet.Version optimistic concurrency: two concurrent session completions
+                // for the same coach collide here. Surface as 409 so the caller can retry.
+                throw new ConflictException(
+                    ErrorCodes.InsufficientWalletBalance,
+                    "A concurrent wallet update was detected. Please try again.");
+            }
         }
 
         private static IQueryable<Booking> ApplyFilter(

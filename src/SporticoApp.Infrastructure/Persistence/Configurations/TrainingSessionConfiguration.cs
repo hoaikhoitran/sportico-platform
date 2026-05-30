@@ -47,5 +47,11 @@ public sealed class TrainingSessionConfiguration : IEntityTypeConfiguration<Trai
             .WithMany(p => p.TrainingSessions)
             .HasForeignKey(d => d.CoachId)
             .HasConstraintName("fk_training_sessions_coach");
+
+        builder.HasOne(d => d.AvailabilitySlot)
+            .WithMany()
+            .HasForeignKey(d => d.AvailabilitySlotId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .HasConstraintName("fk_training_sessions_availability_slot");
     }
 }

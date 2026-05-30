@@ -22,5 +22,15 @@ namespace SporticoApp.Infrastructure.Services.Payments
         public string CancelUrl { get; set; } = string.Empty;
 
         public int PaymentLinkExpireMinutes { get; set; } = 15;
+
+        // ── Payout (Chi) settings ────────────────────────────────────────────
+        /// <summary>
+        /// When true, WithdrawalService.CreateAsync automatically calls PayOS payout API.
+        /// When false, the old admin approve → manual-transfer → mark-paid flow is used.
+        /// </summary>
+        public bool AutoPayoutEnabled { get; set; } = false;
+
+        /// <summary>Default PayOS payout category (e.g. "salary", "business").</summary>
+        public string PayoutCategory { get; set; } = "salary";
     }
 }

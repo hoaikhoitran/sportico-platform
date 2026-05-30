@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using SporticoApp.Application.DTOs.Wallets;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
+using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Exceptions;
 
 namespace SporticoApp.Infrastructure.Persistence.Repositories
 {
@@ -78,7 +80,16 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
 
         public async Task SaveChangesAsync()
         {
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                throw new ConflictException(
+                    ErrorCodes.InsufficientWalletBalance,
+                    "A concurrent wallet update was detected. Please try again.");
+            }
         }
     }
 }

@@ -21,6 +21,14 @@ namespace SporticoApp.Application.Interfaces.Repositories
             DateTime endTime,
             List<string> activeStatuses);
 
+        Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByLearnerAsync(
+            Guid learnerId,
+            TrainingSessionFilterRequest filter);
+
+        Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByCoachAsync(
+            Guid coachId,
+            TrainingSessionFilterRequest filter);
+
         Task AddAsync(TrainingSession session);
 
         Task AddWithoutSaveAsync(TrainingSession session);

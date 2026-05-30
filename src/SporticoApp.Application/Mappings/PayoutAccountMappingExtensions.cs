@@ -18,6 +18,7 @@ namespace SporticoApp.Application.Mappings
                 CoachId = coachId,
                 PayoutMethod = request.PayoutMethod.Trim(),
                 BankName = request.BankName.Trim(),
+                BankBin = request.BankBin.Trim(),
                 BankAccountNumber = request.BankAccountNumber.Trim(),
                 BankAccountHolder = request.BankAccountHolder.Trim(),
                 Status = PayoutAccountStatuses.Pending,
@@ -32,6 +33,7 @@ namespace SporticoApp.Application.Mappings
         {
             account.PayoutMethod = request.PayoutMethod.Trim();
             account.BankName = request.BankName.Trim();
+            account.BankBin = request.BankBin.Trim();
             account.BankAccountNumber = request.BankAccountNumber.Trim();
             account.BankAccountHolder = request.BankAccountHolder.Trim();
             account.Status = PayoutAccountStatuses.Pending;
@@ -46,6 +48,7 @@ namespace SporticoApp.Application.Mappings
                 CoachId = account.CoachId,
                 PayoutMethod = account.PayoutMethod,
                 BankName = account.BankName,
+                BankBin = account.BankBin,
                 BankAccountNumber = account.BankAccountNumber,
                 BankAccountHolder = account.BankAccountHolder,
                 Status = account.Status,

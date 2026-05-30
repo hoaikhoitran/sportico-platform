@@ -16,6 +16,7 @@ namespace SporticoApp.Application.Services
     {
         private readonly IBookingRepository _bookingRepository;
         private readonly ITrainingSessionRepository _trainingSessionRepository;
+        private readonly ICoachAvailabilityRepository _availabilityRepository;
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
         private readonly IValidator<CreateTrainingSessionRequest> _createValidator;
@@ -26,6 +27,7 @@ namespace SporticoApp.Application.Services
         public TrainingSessionService(
             IBookingRepository bookingRepository,
             ITrainingSessionRepository trainingSessionRepository,
+            ICoachAvailabilityRepository availabilityRepository,
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
             IValidator<CreateTrainingSessionRequest> createValidator,
@@ -35,6 +37,7 @@ namespace SporticoApp.Application.Services
         {
             _bookingRepository = bookingRepository;
             _trainingSessionRepository = trainingSessionRepository;
+            _availabilityRepository = availabilityRepository;
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
             _createValidator = createValidator;
@@ -60,13 +63,7 @@ namespace SporticoApp.Application.Services
                     details);
             }
 
-            if (request.StartTime <= DateTime.UtcNow)
-            {
-                throw new ValidationException(
-                    ErrorCodes.ValidationError,
-                    "StartTime must be in the future");
-            }
-
+            // ── 1. Load and validate the booking ─────────────────────────────────
             var booking = await _bookingRepository.GetByIdForLearnerForUpdateAsync(learnerId, request.BookingId);
 
             if (booking == null)
@@ -91,6 +88,15 @@ namespace SporticoApp.Application.Services
                     "Booking is not active");
             }
 
+            // ── 2. Package expiration check ───────────────────────────────────────
+            if (booking.ExpiresAt.HasValue && DateTime.UtcNow > booking.ExpiresAt.Value)
+            {
+                throw new ConflictException(
+                    ErrorCodes.BookingNotActive,
+                    "Booking package has expired");
+            }
+
+            // ── 3. Session-quota check (requested + scheduled + completed) ────────
             var countedStatuses = new List<string>
             {
                 TrainingSessionStatuses.Requested,
@@ -109,6 +115,46 @@ namespace SporticoApp.Application.Services
                     "Training session limit exceeded");
             }
 
+            // ── 4. Load and validate the availability slot ────────────────────────
+            var slot = await _availabilityRepository.GetByIdForUpdateAsync(request.AvailabilitySlotId);
+
+            if (slot == null)
+            {
+                throw new NotFoundException(
+                    ErrorCodes.ValidationError,
+                    "Availability slot not found");
+            }
+
+            if (slot.CoachId != booking.CoachId)
+            {
+                throw new ForbiddenException(
+                    ErrorCodes.Forbidden,
+                    "Availability slot does not belong to the booking's coach");
+            }
+
+            if (slot.Status != CoachAvailabilitySlotStatuses.Available)
+            {
+                throw new ConflictException(
+                    ErrorCodes.ScheduleConflict,
+                    "Availability slot is no longer available");
+            }
+
+            if (slot.StartTime <= DateTime.UtcNow)
+            {
+                throw new ConflictException(
+                    ErrorCodes.ScheduleConflict,
+                    "Availability slot is in the past");
+            }
+
+            // Slot must start before the booking expires
+            if (booking.ExpiresAt.HasValue && slot.StartTime > booking.ExpiresAt.Value)
+            {
+                throw new ConflictException(
+                    ErrorCodes.BookingNotActive,
+                    "Availability slot is after the booking expiration date");
+            }
+
+            // ── 5. Overlap safety-guards (secondary to slot-based flow) ───────────
             var activeStatuses = new List<string>
             {
                 TrainingSessionStatuses.Requested,
@@ -117,33 +163,40 @@ namespace SporticoApp.Application.Services
 
             var coachOverlap = await _trainingSessionRepository.HasOverlapAsync(
                 booking.CoachId,
-                request.StartTime,
-                request.EndTime,
+                slot.StartTime,
+                slot.EndTime,
                 activeStatuses);
 
             if (coachOverlap)
             {
                 throw new ConflictException(
                     ErrorCodes.ScheduleConflict,
-                    "Coach has a schedule conflict");
+                    "Coach has a schedule conflict at this time");
             }
 
             var learnerOverlap = await _trainingSessionRepository.HasOverlapAsync(
                 booking.LearnerId,
-                request.StartTime,
-                request.EndTime,
+                slot.StartTime,
+                slot.EndTime,
                 activeStatuses);
 
             if (learnerOverlap)
             {
                 throw new ConflictException(
                     ErrorCodes.ScheduleConflict,
-                    "Learner has a schedule conflict");
+                    "Learner has a schedule conflict at this time");
             }
 
-            var session = request.ToEntity(booking.LearnerId, booking.CoachId);
+            // ── 6. Create session and mark slot as booked ─────────────────────────
+            var session = request.ToEntity(booking.LearnerId, booking.CoachId, slot);
+
+            slot.Status = CoachAvailabilitySlotStatuses.Booked;
+            slot.UpdatedAt = DateTime.UtcNow;
 
             await _trainingSessionRepository.AddAsync(session);
+
+            // Slot status is tracked; SaveChanges for the session already flushed it.
+            await _availabilityRepository.SaveChangesAsync();
 
             await _notificationRepository.AddWithoutSaveAsync(new Notification
             {
@@ -323,16 +376,24 @@ namespace SporticoApp.Application.Services
             if (!string.IsNullOrWhiteSpace(request.Reason))
             {
                 if (isCoach)
-                {
                     session.CoachNote = request.Reason.Trim();
-                }
                 else
-                {
                     session.LearnerNote = request.Reason.Trim();
-                }
             }
 
             await _trainingSessionRepository.SaveChangesAsync();
+
+            // Free the availability slot back to available when a session is cancelled
+            if (session.AvailabilitySlotId.HasValue)
+            {
+                var slot = await _availabilityRepository.GetByIdForUpdateAsync(session.AvailabilitySlotId.Value);
+                if (slot != null && slot.Status == CoachAvailabilitySlotStatuses.Booked)
+                {
+                    slot.Status = CoachAvailabilitySlotStatuses.Available;
+                    slot.UpdatedAt = DateTime.UtcNow;
+                    await _availabilityRepository.SaveChangesAsync();
+                }
+            }
 
             var notifyUserId = isCoach ? session.LearnerId : session.CoachId;
             await _notificationRepository.AddWithoutSaveAsync(new Notification
@@ -414,6 +475,7 @@ namespace SporticoApp.Application.Services
             wallet.AvailableBalance += amount;
             wallet.TotalEarned += amount;
             wallet.UpdatedAt = DateTime.UtcNow;
+            wallet.Version++;
 
             await _coachWalletRepository.AddTransactionWithoutSaveAsync(new CoachWalletTransaction
             {
@@ -459,6 +521,62 @@ namespace SporticoApp.Application.Services
             await _notificationRepository.SaveChangesAsync();
 
             return Result<TrainingSessionResponse>.Success(session.ToResponse());
+        }
+
+        public async Task<Result<PagedResult<TrainingSessionResponse>>> GetMySessionsAsLearnerAsync(
+            Guid learnerId,
+            TrainingSessionFilterRequest filter)
+        {
+            var validationResult = await _filterValidator.ValidateAsync(filter);
+            if (!validationResult.IsValid)
+            {
+                var details = validationResult.Errors
+                    .Select(x => x.ErrorMessage)
+                    .ToList();
+
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Invalid request data",
+                    details);
+            }
+
+            var (items, totalCount) = await _trainingSessionRepository.GetPagedByLearnerAsync(learnerId, filter);
+
+            var response = new PagedResult<TrainingSessionResponse>(
+                items.Select(x => x.ToResponse()).ToList(),
+                totalCount,
+                filter.PageNumber,
+                filter.PageSize);
+
+            return Result<PagedResult<TrainingSessionResponse>>.Success(response);
+        }
+
+        public async Task<Result<PagedResult<TrainingSessionResponse>>> GetMySessionsAsCoachAsync(
+            Guid coachId,
+            TrainingSessionFilterRequest filter)
+        {
+            var validationResult = await _filterValidator.ValidateAsync(filter);
+            if (!validationResult.IsValid)
+            {
+                var details = validationResult.Errors
+                    .Select(x => x.ErrorMessage)
+                    .ToList();
+
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Invalid request data",
+                    details);
+            }
+
+            var (items, totalCount) = await _trainingSessionRepository.GetPagedByCoachAsync(coachId, filter);
+
+            var response = new PagedResult<TrainingSessionResponse>(
+                items.Select(x => x.ToResponse()).ToList(),
+                totalCount,
+                filter.PageNumber,
+                filter.PageSize);
+
+            return Result<PagedResult<TrainingSessionResponse>>.Success(response);
         }
     }
 }

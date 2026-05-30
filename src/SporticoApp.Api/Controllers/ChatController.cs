@@ -19,6 +19,15 @@ namespace SporticoApp.Api.Controllers
             _chatService = chatService;
         }
 
+        [HttpPost("rooms")]
+        [ProducesResponseType(typeof(Result<ChatRoomResponse>), 200)]
+        public async Task<IActionResult> CreateOrGetRoom([FromBody] CreateChatRoomRequest request)
+        {
+            var userId = User.GetUserId();
+            var result = await _chatService.CreateOrGetRoomAsync(userId, request);
+            return Ok(result);
+        }
+
         [HttpGet("rooms")]
         [ProducesResponseType(typeof(Result<List<ChatRoomResponse>>), 200)]
         public async Task<IActionResult> GetRooms()

@@ -22,6 +22,14 @@ public sealed class CoachWalletConfiguration : IEntityTypeConfiguration<CoachWal
         builder.Property(e => e.TotalEarned).HasPrecision(12, 2).HasDefaultValue(0);
         builder.Property(e => e.TotalWithdrawn).HasPrecision(12, 2).HasDefaultValue(0);
 
+        // Optimistic concurrency token: an application-managed integer version counter.
+        // EF Core includes `WHERE version = @old` in every UPDATE; if another transaction
+        // already incremented the row, DbUpdateConcurrencyException is raised, preventing
+        // two concurrent withdrawals from double-spending the same AvailableBalance.
+        builder.Property(e => e.Version)
+            .IsConcurrencyToken()
+            .HasDefaultValue(0);
+
         builder.HasOne(d => d.Coach)
             .WithOne(p => p.Wallet)
             .HasForeignKey<CoachWallet>(d => d.CoachId)

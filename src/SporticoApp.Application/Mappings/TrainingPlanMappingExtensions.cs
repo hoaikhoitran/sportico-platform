@@ -36,16 +36,15 @@ namespace SporticoApp.Application.Mappings
             this TrainingPlan plan,
             UpdateTrainingPlanRequest request)
         {
+            // Status is intentionally NOT applied here — the service validates the
+            // status transition before mutating plan.Status. This method only updates
+            // free-form metadata fields.
             plan.Title = request.Title.Trim();
             plan.GoalType = request.GoalType.Trim();
             plan.Overview = request.Overview?.Trim();
             plan.StartDate = request.StartDate;
             plan.EndDate = request.EndDate;
             plan.TotalWeeks = request.TotalWeeks;
-            if (!string.IsNullOrWhiteSpace(request.Status))
-            {
-                plan.Status = request.Status.Trim().ToLowerInvariant();
-            }
             plan.UpdatedAt = DateTime.UtcNow;
         }
 
@@ -108,8 +107,12 @@ namespace SporticoApp.Application.Mappings
             exercise.Notes = request.Notes?.Trim();
         }
 
-        public static TrainingPlanResponse ToResponse(this TrainingPlan plan)
+        public static TrainingPlanResponse ToResponse(
+            this TrainingPlan plan,
+            DateTime? bookingExpiresAt = null)
         {
+            var (isReadOnly, reason) = ComputeReadOnly(plan.Status, bookingExpiresAt);
+
             return new TrainingPlanResponse
             {
                 Id = plan.Id,
@@ -125,11 +128,40 @@ namespace SporticoApp.Application.Mappings
                 Status = plan.Status,
                 CreatedAt = plan.CreatedAt,
                 UpdatedAt = plan.UpdatedAt,
+                BookingExpiresAt = bookingExpiresAt,
+                IsReadOnly = isReadOnly,
+                ReadOnlyReason = reason,
                 Weeks = plan.Weeks
                     .OrderBy(x => x.WeekNumber)
                     .Select(x => x.ToResponse())
                     .ToList()
             };
+        }
+
+        /// <summary>
+        /// A plan is read-only when its status is terminal (completed/cancelled) or the
+        /// underlying package has expired. Mirrors the mutation gate in TrainingPlanService.
+        /// </summary>
+        private static (bool IsReadOnly, string? Reason) ComputeReadOnly(
+            string status,
+            DateTime? bookingExpiresAt)
+        {
+            if (status == TrainingPlanStatuses.Completed)
+            {
+                return (true, "Training plan completed");
+            }
+
+            if (status == TrainingPlanStatuses.Cancelled)
+            {
+                return (true, "Training plan cancelled");
+            }
+
+            if (bookingExpiresAt is { } expiresAt && DateTime.UtcNow > expiresAt)
+            {
+                return (true, "Training package expired");
+            }
+
+            return (false, null);
         }
 
         public static TrainingPlanWeekResponse ToResponse(this TrainingPlanWeek week)

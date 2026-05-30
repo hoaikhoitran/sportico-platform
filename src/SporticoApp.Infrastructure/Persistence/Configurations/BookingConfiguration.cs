@@ -32,6 +32,7 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
             .HasComment("pending_payment | active | completed | cancelled | refunded");
         builder.Property(e => e.CompletedSessions).HasDefaultValue(0);
         builder.Property(e => e.TotalSessions).HasDefaultValue(0);
+        builder.Property(e => e.ExpiresAt).IsRequired(false);
 
         builder.HasOne(d => d.Learner)
             .WithMany(p => p.BookingsAsLearner)

@@ -50,6 +50,7 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<ICoachWalletRepository, CoachWalletRepository>();
             services.AddScoped<IWithdrawalRequestRepository, WithdrawalRequestRepository>();
             services.AddScoped<IChatRepository, ChatRepository>();
+            services.AddScoped<ICoachAvailabilityRepository, CoachAvailabilityRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IPublicCoachRepository, PublicCoachRepository>();
 
@@ -63,6 +64,21 @@ namespace SporticoApp.Infrastructure
             {
                 var settings = sp.GetRequiredService<IOptions<PayOsSettings>>().Value;
                 client.BaseAddress = new Uri(settings.BaseUrl);
+            });
+
+            services.AddHttpClient<IPayOsPayoutService, PayOsPayoutService>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<IOptions<PayOsSettings>>().Value;
+                client.BaseAddress = new Uri(settings.BaseUrl);
+            });
+
+            // Bind PayoutOptions from the PayOs config section so Application layer
+            // can read AutoPayoutEnabled and PayoutCategory without depending on Infrastructure.
+            services.Configure<SporticoApp.Application.Options.PayoutOptions>(options =>
+            {
+                var section = configuration.GetSection("PayOs");
+                options.AutoPayoutEnabled = section.GetValue<bool>("AutoPayoutEnabled");
+                options.PayoutCategory = section.GetValue<string>("PayoutCategory") ?? "salary";
             });
 
             return services;

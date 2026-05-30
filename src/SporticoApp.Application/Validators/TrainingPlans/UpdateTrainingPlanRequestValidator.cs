@@ -1,5 +1,6 @@
 using FluentValidation;
 using SporticoApp.Application.DTOs.TrainingPlans;
+using SporticoApp.Shared.Constants;
 
 namespace SporticoApp.Application.Validators.TrainingPlans
 {
@@ -34,8 +35,8 @@ namespace SporticoApp.Application.Validators.TrainingPlans
                 .WithMessage("EndDate must be after StartDate");
 
             RuleFor(x => x.Status)
-                .MaximumLength(20)
-                .WithMessage("Status is too long")
+                .Must(status => TrainingPlanStatuses.All.Contains(status!.Trim().ToLowerInvariant()))
+                .WithMessage("Status must be one of: draft, active, completed, cancelled")
                 .When(x => !string.IsNullOrWhiteSpace(x.Status));
         }
     }

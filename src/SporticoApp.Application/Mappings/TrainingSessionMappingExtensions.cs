@@ -9,7 +9,8 @@ namespace SporticoApp.Application.Mappings
         public static TrainingSession ToEntity(
             this CreateTrainingSessionRequest request,
             Guid learnerId,
-            Guid coachId)
+            Guid coachId,
+            CoachAvailabilitySlot slot)
         {
             var now = DateTime.UtcNow;
 
@@ -19,10 +20,11 @@ namespace SporticoApp.Application.Mappings
                 BookingId = request.BookingId,
                 LearnerId = learnerId,
                 CoachId = coachId,
-                StartTime = request.StartTime,
-                EndTime = request.EndTime,
-                Location = request.Location?.Trim(),
-                MeetingUrl = request.MeetingUrl?.Trim(),
+                AvailabilitySlotId = slot.Id,
+                StartTime = slot.StartTime,
+                EndTime = slot.EndTime,
+                Location = slot.Location,
+                MeetingUrl = slot.MeetingUrl,
                 LearnerNote = request.LearnerNote?.Trim(),
                 Status = TrainingSessionStatuses.Requested,
                 CreatedAt = now,

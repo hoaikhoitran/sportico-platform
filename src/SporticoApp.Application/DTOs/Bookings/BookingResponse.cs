@@ -34,6 +34,8 @@ namespace SporticoApp.Application.DTOs.Bookings
 
         public DateTime? CancelledAt { get; set; }
 
+        public DateTime? ExpiresAt { get; set; }
+
         public DateTime CreatedAt { get; set; }
 
         public DateTime UpdatedAt { get; set; }

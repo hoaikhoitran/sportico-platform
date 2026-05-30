@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
+    public DbSet<CoachAvailabilitySlot> CoachAvailabilitySlots => Set<CoachAvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<CoachPayoutAccount> CoachPayoutAccounts => Set<CoachPayoutAccount>();
     public DbSet<CoachWallet> CoachWallets => Set<CoachWallet>();

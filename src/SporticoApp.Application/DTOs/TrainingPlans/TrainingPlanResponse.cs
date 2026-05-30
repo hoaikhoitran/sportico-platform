@@ -30,6 +30,15 @@ namespace SporticoApp.Application.DTOs.TrainingPlans
 
         public DateTime UpdatedAt { get; set; }
 
+        /// <summary>Expiry of the underlying purchased package (Booking.ExpiresAt). Null if not set.</summary>
+        public DateTime? BookingExpiresAt { get; set; }
+
+        /// <summary>True when the plan can no longer be edited (terminal status or expired package).</summary>
+        public bool IsReadOnly { get; set; }
+
+        /// <summary>Human-readable reason the plan is read-only, or null when editable.</summary>
+        public string? ReadOnlyReason { get; set; }
+
         public List<TrainingPlanWeekResponse> Weeks { get; set; } = new();
     }
 }

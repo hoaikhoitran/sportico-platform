@@ -20,6 +20,12 @@ namespace SporticoApp.Application.Validators.PayoutAccounts
                 .MaximumLength(255)
                 .WithMessage("BankName is too long");
 
+            RuleFor(x => x.BankBin)
+                .NotEmpty()
+                .WithMessage("BankBin is required")
+                .Matches(@"^\d{6}$")
+                .WithMessage("BankBin must be exactly 6 digits (e.g. 970415)");
+
             RuleFor(x => x.BankAccountNumber)
                 .NotEmpty()
                 .WithMessage("BankAccountNumber is required")

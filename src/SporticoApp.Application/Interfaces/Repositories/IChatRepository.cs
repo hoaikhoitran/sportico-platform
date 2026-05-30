@@ -17,7 +17,8 @@ namespace SporticoApp.Application.Interfaces.Repositories
             Guid roomId,
             ChatMessageFilterRequest filter);
 
-        Task AddRoomAsync(ChatRoom room);
+        /// <summary>Returns the inserted room, or the existing room if a concurrent insert caused a unique-key conflict.</summary>
+        Task<ChatRoom> AddRoomAsync(ChatRoom room);
 
         Task AddMessageAsync(Message message);
 

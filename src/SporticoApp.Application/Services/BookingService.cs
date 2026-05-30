@@ -23,7 +23,6 @@ namespace SporticoApp.Application.Services
         private readonly IPaymentRepository _paymentRepository;
         private readonly IPayOsService _payOsService;
         private readonly ICoachWalletRepository _coachWalletRepository;
-        private readonly IChatRepository _chatRepository;
         private readonly INotificationRepository _notificationRepository;
         private readonly IValidator<PurchaseTrainingPackageManualRequest> _manualValidator;
         private readonly IValidator<PurchaseTrainingPackagePayOsRequest> _payOsValidator;
@@ -35,7 +34,6 @@ namespace SporticoApp.Application.Services
             IPaymentRepository paymentRepository,
             IPayOsService payOsService,
             ICoachWalletRepository coachWalletRepository,
-            IChatRepository chatRepository,
             INotificationRepository notificationRepository,
             IValidator<PurchaseTrainingPackageManualRequest> manualValidator,
             IValidator<PurchaseTrainingPackagePayOsRequest> payOsValidator,
@@ -46,7 +44,6 @@ namespace SporticoApp.Application.Services
             _paymentRepository = paymentRepository;
             _payOsService = payOsService;
             _coachWalletRepository = coachWalletRepository;
-            _chatRepository = chatRepository;
             _notificationRepository = notificationRepository;
             _manualValidator = manualValidator;
             _payOsValidator = payOsValidator;
@@ -94,6 +91,7 @@ namespace SporticoApp.Application.Services
 
             var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.Active);
             booking.PaidAt = DateTime.UtcNow;
+            booking.ExpiresAt = booking.PaidAt.Value.AddDays(trainingPackage.DurationDays);
 
             var payment = new Payment
             {
@@ -276,6 +274,7 @@ namespace SporticoApp.Application.Services
                 {
                     booking.Status = BookingStatuses.Active;
                     booking.PaidAt = DateTime.UtcNow;
+                    booking.ExpiresAt = booking.PaidAt.Value.AddDays(booking.TrainingPackage.DurationDays);
                 }
 
                 await _bookingRepository.SaveChangesAsync();
@@ -468,7 +467,6 @@ namespace SporticoApp.Application.Services
         private async Task EnsureBookingActivatedAsync(Booking booking, bool notify)
         {
             await EnsureCoachWalletAsync(booking.CoachId);
-            await EnsureChatRoomAsync(booking.LearnerId, booking.CoachId);
 
             if (!notify)
             {
@@ -516,26 +514,6 @@ namespace SporticoApp.Application.Services
                 TotalWithdrawn = 0,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
-            });
-        }
-
-        private async Task EnsureChatRoomAsync(Guid learnerId, Guid coachId)
-        {
-            var room = await _chatRepository.GetRoomByUsersAsync(learnerId, coachId);
-            if (room != null)
-            {
-                return;
-            }
-
-            var user1Id = learnerId.CompareTo(coachId) <= 0 ? learnerId : coachId;
-            var user2Id = learnerId.CompareTo(coachId) <= 0 ? coachId : learnerId;
-
-            await _chatRepository.AddRoomAsync(new ChatRoom
-            {
-                Id = Guid.NewGuid(),
-                User1Id = user1Id,
-                User2Id = user2Id,
-                CreatedAt = DateTime.UtcNow
             });
         }
 

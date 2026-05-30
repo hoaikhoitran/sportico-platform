@@ -15,6 +15,11 @@ public partial class TrainingSession
 
     public Guid CoachId { get; set; }
 
+    /// <summary>The availability slot this session was booked from. Nullable for legacy records.</summary>
+    public Guid? AvailabilitySlotId { get; set; }
+
+    public virtual CoachAvailabilitySlot? AvailabilitySlot { get; set; }
+
     public DateTime StartTime { get; set; }
 
     public DateTime EndTime { get; set; }

@@ -8,6 +8,8 @@ namespace SporticoApp.Application.Interfaces.Repositories
 
         Task<CoachPayoutAccount?> GetByCoachIdForUpdateAsync(Guid coachId);
 
+        Task<CoachPayoutAccount?> GetByIdAsync(Guid id);
+
         Task<CoachPayoutAccount?> GetByIdForUpdateAsync(Guid id);
 
         Task<(List<CoachPayoutAccount> Items, int TotalCount)> GetPendingPagedAsync(

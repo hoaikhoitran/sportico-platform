@@ -19,6 +19,8 @@ namespace SporticoApp.Api.Controllers
             _withdrawalService = withdrawalService;
         }
 
+        // ── Coach endpoints ───────────────────────────────────────────────────
+
         [HttpPost("api/coaches/me/withdrawal-requests")]
         [Authorize(Roles = RoleConstants.Coach)]
         [ProducesResponseType(typeof(Result<WithdrawalRequestResponse>), 200)]
@@ -38,6 +40,18 @@ namespace SporticoApp.Api.Controllers
             var result = await _withdrawalService.GetMyAsync(coachId, filter);
             return Ok(result);
         }
+
+        [HttpGet("api/coaches/me/withdrawal-requests/{id:guid}/receipt")]
+        [Authorize(Roles = RoleConstants.Coach)]
+        [ProducesResponseType(typeof(Result<WithdrawalReceiptResponse>), 200)]
+        public async Task<IActionResult> GetReceipt(Guid id)
+        {
+            var coachId = User.GetUserId();
+            var result = await _withdrawalService.GetReceiptAsync(coachId, id);
+            return Ok(result);
+        }
+
+        // ── Admin endpoints ───────────────────────────────────────────────────
 
         [HttpGet("api/admin/withdrawal-requests/pending")]
         [Authorize(Roles = RoleConstants.Admin)]
@@ -61,9 +75,7 @@ namespace SporticoApp.Api.Controllers
         [HttpPut("api/admin/withdrawal-requests/{id:guid}/reject")]
         [Authorize(Roles = RoleConstants.Admin)]
         [ProducesResponseType(typeof(Result<WithdrawalRequestResponse>), 200)]
-        public async Task<IActionResult> Reject(
-            Guid id,
-            [FromBody] RejectWithdrawalRequest request)
+        public async Task<IActionResult> Reject(Guid id, [FromBody] RejectWithdrawalRequest request)
         {
             var adminId = User.GetUserId();
             var result = await _withdrawalService.RejectAsync(adminId, id, request);
@@ -77,6 +89,33 @@ namespace SporticoApp.Api.Controllers
         {
             var adminId = User.GetUserId();
             var result = await _withdrawalService.MarkPaidAsync(adminId, id);
+            return Ok(result);
+        }
+
+        [HttpPut("api/admin/withdrawal-requests/{id:guid}/refresh-payout-status")]
+        [Authorize(Roles = RoleConstants.Admin)]
+        [ProducesResponseType(typeof(Result<WithdrawalRequestResponse>), 200)]
+        public async Task<IActionResult> RefreshPayoutStatus(Guid id)
+        {
+            var result = await _withdrawalService.RefreshPayoutStatusAsync(id);
+            return Ok(result);
+        }
+
+        [HttpPost("api/admin/withdrawal-requests/{id:guid}/retry-payout")]
+        [Authorize(Roles = RoleConstants.Admin)]
+        [ProducesResponseType(typeof(Result<WithdrawalRequestResponse>), 200)]
+        public async Task<IActionResult> RetryPayout(Guid id)
+        {
+            var result = await _withdrawalService.RetryPayoutAsync(id);
+            return Ok(result);
+        }
+
+        [HttpGet("api/admin/withdrawal-requests/{id:guid}/receipt")]
+        [Authorize(Roles = RoleConstants.Admin)]
+        [ProducesResponseType(typeof(Result<WithdrawalReceiptResponse>), 200)]
+        public async Task<IActionResult> GetReceiptAdmin(Guid id)
+        {
+            var result = await _withdrawalService.GetReceiptAdminAsync(id);
             return Ok(result);
         }
     }

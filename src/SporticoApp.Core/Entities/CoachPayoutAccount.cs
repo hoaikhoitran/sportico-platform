@@ -15,6 +15,9 @@ public partial class CoachPayoutAccount
 
     public string BankName { get; set; } = null!;
 
+    /// <summary>6-digit bank BIN required by the PayOS payout toBin field.</summary>
+    public string BankBin { get; set; } = null!;
+
     public string BankAccountNumber { get; set; } = null!;
 
     public string BankAccountHolder { get; set; } = null!;

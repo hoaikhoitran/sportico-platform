@@ -41,6 +41,9 @@ public partial class Booking
 
     public DateTime? CancelledAt { get; set; }
 
+    /// <summary>Set when the booking becomes active: PaidAt + TrainingPackage.DurationDays.</summary>
+    public DateTime? ExpiresAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }

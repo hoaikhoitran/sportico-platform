@@ -63,6 +63,10 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
                     b.Property<Guid>("LearnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("learner_id");
@@ -174,6 +178,86 @@ namespace SporticoApp.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachAvailabilitySlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("CoachId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("coach_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_time");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_online");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("location");
+
+                    b.Property<string>("MeetingUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("meeting_url");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'available'::character varying")
+                        .HasComment("available | booked | cancelled | expired");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("coach_availability_slots_pkey");
+
+                    b.HasIndex(new[] { "CoachId" }, "idx_coach_availability_slots_coach");
+
+                    b.HasIndex(new[] { "CoachId", "StartTime" }, "idx_coach_availability_slots_coach_start");
+
+                    b.HasIndex(new[] { "StartTime" }, "idx_coach_availability_slots_start_time");
+
+                    b.HasIndex(new[] { "Status" }, "idx_coach_availability_slots_status");
+
+                    b.HasIndex(new[] { "CoachId", "StartTime", "EndTime" }, "uq_coach_availability_slots_coach_time")
+                        .IsUnique();
+
+                    b.ToTable("coach_availability_slots", null, t =>
+                        {
+                            t.HasComment("Time slots a coach publishes as bookable");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachPackage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -254,6 +338,12 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("bank_account_number");
+
+                    b.Property<string>("BankBin")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("bank_bin");
 
                     b.Property<string>("BankName")
                         .IsRequired()
@@ -644,6 +734,13 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("version");
 
                     b.HasKey("Id")
                         .HasName("coach_wallets_pkey");
@@ -2035,6 +2132,10 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<Guid?>("AvailabilitySlotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("availability_slot_id");
+
                     b.Property<Guid>("BookingId")
                         .HasColumnType("uuid")
                         .HasColumnName("booking_id");
@@ -2110,6 +2211,8 @@ namespace SporticoApp.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("training_sessions_pkey");
+
+                    b.HasIndex("AvailabilitySlotId");
 
                     b.HasIndex(new[] { "BookingId" }, "idx_training_sessions_booking");
 
@@ -2429,6 +2532,38 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<string>("PayOsPayoutId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("pay_os_payout_id");
+
+                    b.Property<string>("PayOsPayoutStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("pay_os_payout_status");
+
+                    b.Property<string>("PayOsRawResponse")
+                        .HasColumnType("text")
+                        .HasColumnName("pay_os_raw_response");
+
+                    b.Property<string>("PayOsReferenceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("pay_os_reference_id");
+
+                    b.Property<DateTime?>("ProcessingAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processing_at");
+
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("reviewed_at");
@@ -2521,6 +2656,18 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("User1");
 
                     b.Navigation("User2");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CoachAvailabilitySlot", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CoachProfile", "Coach")
+                        .WithMany()
+                        .HasForeignKey("CoachId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_coach_availability_slots_coach");
+
+                    b.Navigation("Coach");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachPackage", b =>
@@ -2982,6 +3129,12 @@ namespace SporticoApp.Infrastructure.Migrations
 
             modelBuilder.Entity("SporticoApp.Core.Entities.TrainingSession", b =>
                 {
+                    b.HasOne("SporticoApp.Core.Entities.CoachAvailabilitySlot", "AvailabilitySlot")
+                        .WithMany()
+                        .HasForeignKey("AvailabilitySlotId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_training_sessions_availability_slot");
+
                     b.HasOne("SporticoApp.Core.Entities.Booking", "Booking")
                         .WithMany("TrainingSessions")
                         .HasForeignKey("BookingId")
@@ -3002,6 +3155,8 @@ namespace SporticoApp.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_training_sessions_learner");
+
+                    b.Navigation("AvailabilitySlot");
 
                     b.Navigation("Booking");
 
