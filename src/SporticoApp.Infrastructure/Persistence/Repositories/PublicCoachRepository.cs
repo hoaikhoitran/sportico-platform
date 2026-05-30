@@ -23,9 +23,10 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .AsNoTracking()
                 .Include(c => c.User)
                 .Include(c => c.CoachSports)
-                    .ThenInclude(c => c.Sport)
+                    .ThenInclude(cs => cs.Sport)
                 .Include(c => c.Media)
                 .Include(c => c.TrainingPackages)
+                    .ThenInclude(tp => tp.Sport)
                 .FirstOrDefaultAsync(c => c.UserId == coachId && c.User.Status == "active");
         }
 

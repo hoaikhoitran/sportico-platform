@@ -53,7 +53,6 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IPublicCoachRepository, PublicCoachRepository>();
 
-
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             services.AddScoped<IEmailService, EmailService>();

@@ -90,8 +90,6 @@ namespace SporticoApp.Shared.Constants
             "COACH_TEACHING_LOCATION_NOT_FOUND";
         public const string CoachTeachingLocationNotOwned =
             "COACH_TEACHING_LOCATION_NOT_OWNED";
-        public const string CoachNotFound =
-            "COACH_NOT_FOUND";
 
         // Sport
         public const string InvalidSport =

@@ -1,4 +1,5 @@
-﻿using SporticoApp.Application.DTOs.PublicCoaches;
+﻿using Microsoft.Extensions.Logging;
+using SporticoApp.Application.DTOs.PublicCoaches;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Application.Mappings;
@@ -16,21 +17,42 @@ namespace SporticoApp.Application.Services
     public class PublicCoachService : IPublicCoachService
     {
         private readonly IPublicCoachRepository _publicCoachRepository;
-        public PublicCoachService(IPublicCoachRepository publicCoachRepository)
+        private readonly ILogger<PublicCoachService> _logger;
+        public PublicCoachService(
+            IPublicCoachRepository publicCoachRepository,
+            ILogger<PublicCoachService> logger)
         {
             _publicCoachRepository = publicCoachRepository;
+            _logger = logger;
         }
         public async Task<Result<PublicCoachDetailResponse>> GetByIdAsync(Guid coachId)
         {
+            _logger.LogInformation(
+                "Public coach detail requested. CoachId={CoachId}", coachId);
+
             var coach = await _publicCoachRepository.GetByIdAsync(coachId);
             if (coach == null)
             {
+                _logger.LogInformation(
+                    "Public coach detail not found (no active coach profile). CoachId={CoachId}",
+                    coachId);
+
                 throw new NotFoundException(
-                    ErrorCodes.CoachNotFound,
+                    ErrorCodes.CoachProfileNotFound,
                     "Coach not found."
                     );
             }
-            return Result <PublicCoachDetailResponse>.Success(coach.ToPublicDetailResponse());
+
+            _logger.LogInformation(
+                "Public coach detail found. CoachId={CoachId}, UserLoaded={UserLoaded}, " +
+                "Sports={SportCount}, Media={MediaCount}, TrainingPackages={PackageCount}",
+                coachId,
+                coach.User != null,
+                coach.CoachSports?.Count ?? 0,
+                coach.Media?.Count ?? 0,
+                coach.TrainingPackages?.Count ?? 0);
+
+            return Result<PublicCoachDetailResponse>.Success(coach.ToPublicDetailResponse());
         }
 
         public async Task<Result<PagedResult<PublicCoachListItemResponse>>> GetPagedAsync(PublicCoachFilterRequest filter)
