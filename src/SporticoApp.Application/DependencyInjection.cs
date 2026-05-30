@@ -33,6 +33,7 @@ namespace SporticoApp.Application
             services.AddScoped<IWithdrawalService, WithdrawalService>();
             services.AddScoped<IChatService, ChatService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<IPublicCoachService, PublicCoachService>();
 
             services.AddValidatorsFromAssemblyContaining
                 <RegisterCoachRequestValidator>();

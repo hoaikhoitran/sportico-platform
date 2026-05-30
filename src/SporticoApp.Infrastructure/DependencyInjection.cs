@@ -51,7 +51,8 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<IWithdrawalRequestRepository, WithdrawalRequestRepository>();
             services.AddScoped<IChatRepository, ChatRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
-            
+            services.AddScoped<IPublicCoachRepository, PublicCoachRepository>();
+
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
