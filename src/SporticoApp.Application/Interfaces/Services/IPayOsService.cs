@@ -12,6 +12,13 @@ namespace SporticoApp.Application.Interfaces.Services
         Task<CreatePayOsPaymentResult> CreatePaymentLinkAsync(
             CreatePayOsPaymentRequest request);
 
+        /// <summary>
+        /// Queries PayOS for the real payment state by orderCode
+        /// (GET /v2/payment-requests/{orderCode}). Used by the reconcile flow so the
+        /// backend never trusts the frontend success-page query string.
+        /// </summary>
+        Task<PayOsPaymentStatusResult> GetPaymentStatusAsync(long orderCode);
+
         bool VerifyWebhookSignature(
             object data,
             string signature);

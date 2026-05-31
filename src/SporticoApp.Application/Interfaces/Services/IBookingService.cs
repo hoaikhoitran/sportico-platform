@@ -17,6 +17,15 @@ namespace SporticoApp.Application.Interfaces.Services
         Task<Result<object>> HandlePayOsWebhookAsync(
             PayOsWebhookRequest request);
 
+        /// <summary>
+        /// Learner-initiated reconciliation after returning from PayOS. Verifies the real
+        /// payment state against PayOS (never the frontend query string) and idempotently
+        /// activates the booking when PayOS confirms payment.
+        /// </summary>
+        Task<Result<ReconcilePayOsResponse>> ReconcilePayOsAsync(
+            Guid learnerId,
+            ReconcilePayOsRequest request);
+
         Task<Result<PagedResult<BookingResponse>>> GetMyBookingsAsync(
             Guid learnerId,
             BookingFilterRequest filter);

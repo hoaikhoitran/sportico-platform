@@ -133,6 +133,96 @@ namespace SporticoApp.Infrastructure.Services.Payments
             };
         }
 
+        public async Task<PayOsPaymentStatusResult> GetPaymentStatusAsync(long orderCode)
+        {
+            ValidateSettings();
+
+            using var httpRequest = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"/v2/payment-requests/{orderCode}");
+
+            httpRequest.Headers.Add("x-client-id", _settings.ClientId);
+            httpRequest.Headers.Add("x-api-key", _settings.ApiKey);
+
+            var response = await _httpClient.SendAsync(httpRequest);
+            var rawJson = await response.Content.ReadAsStringAsync();
+
+            // Log the HTTP status and orderCode only — never the API keys.
+            _logger.LogInformation(
+                "payOS get payment status: orderCode={OrderCode} httpStatus={StatusCode}",
+                orderCode,
+                (int)response.StatusCode);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "payOS get payment status failed: orderCode={OrderCode} httpStatus={StatusCode}",
+                    orderCode,
+                    (int)response.StatusCode);
+
+                throw new FailureException(
+                    ErrorCodes.PayOsCreatePaymentFailed,
+                    "Failed to query payOS payment status",
+                    new List<string>
+                    {
+                        $"OrderCode: {orderCode}",
+                        $"StatusCode: {(int)response.StatusCode}",
+                        rawJson
+                    });
+            }
+
+            using var document = JsonDocument.Parse(rawJson);
+            var root = document.RootElement;
+
+            var code = root.TryGetProperty("code", out var codeProp)
+                ? codeProp.GetString() ?? string.Empty
+                : string.Empty;
+
+            var desc = root.TryGetProperty("desc", out var descProp)
+                ? descProp.GetString() ?? string.Empty
+                : string.Empty;
+
+            var result = new PayOsPaymentStatusResult
+            {
+                Code = code,
+                Desc = desc,
+                OrderCode = orderCode,
+                RawJson = rawJson
+            };
+
+            if (root.TryGetProperty("data", out var data) &&
+                data.ValueKind == JsonValueKind.Object)
+            {
+                if (data.TryGetProperty("status", out var statusProp))
+                {
+                    result.Status = (statusProp.GetString() ?? string.Empty)
+                        .Trim()
+                        .ToUpperInvariant();
+                }
+
+                if (data.TryGetProperty("orderCode", out var ocProp) &&
+                    ocProp.ValueKind == JsonValueKind.Number &&
+                    ocProp.TryGetInt64(out var oc))
+                {
+                    result.OrderCode = oc;
+                }
+
+                if (data.TryGetProperty("amount", out var amtProp) &&
+                    amtProp.ValueKind == JsonValueKind.Number)
+                {
+                    result.Amount = amtProp.GetInt32();
+                }
+
+                if (data.TryGetProperty("amountPaid", out var amtPaidProp) &&
+                    amtPaidProp.ValueKind == JsonValueKind.Number)
+                {
+                    result.AmountPaid = amtPaidProp.GetInt32();
+                }
+            }
+
+            return result;
+        }
+
         public bool VerifyWebhookSignature(
             object data,
             string signature)

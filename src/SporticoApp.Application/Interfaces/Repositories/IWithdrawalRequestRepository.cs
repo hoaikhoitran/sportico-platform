@@ -16,6 +16,10 @@ namespace SporticoApp.Application.Interfaces.Repositories
         Task<(List<WithdrawalRequest> Items, int TotalCount)> GetPendingPagedAsync(
             WithdrawalRequestFilterRequest filter);
 
+        /// <summary>Admin: all withdrawals, optionally filtered by any status.</summary>
+        Task<(List<WithdrawalRequest> Items, int TotalCount)> GetPagedAsync(
+            WithdrawalRequestFilterRequest filter);
+
         Task AddAsync(WithdrawalRequest request);
 
         Task AddWithoutSaveAsync(WithdrawalRequest request);

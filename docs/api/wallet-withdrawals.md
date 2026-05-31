@@ -90,6 +90,10 @@ Creates a withdrawal request. If `AutoPayoutEnabled`, the PayOS payout is trigge
 ### GET /api/coaches/me/withdrawal-requests
 List own withdrawal requests. Query: `?status=...&pageNumber=1&pageSize=10`.
 
+### GET /api/coaches/me/withdrawal-requests/{id}
+Get a single own withdrawal request (ownership enforced → `403 COMMON_FORBIDDEN` otherwise,
+`404 WITHDRAWAL_REQUEST_NOT_FOUND` if missing). Returns `WithdrawalRequestResponse`.
+
 ### GET /api/coaches/me/withdrawal-requests/{id}/receipt
 Withdrawal receipt for the authenticated coach.
 
@@ -101,13 +105,25 @@ Withdrawal receipt for the authenticated coach.
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| `GET` | `/api/admin/withdrawal-requests/pending` | List pending/all |
+| `GET` | `/api/admin/withdrawal-requests` | List **all** withdrawals; `?status=` filters any status |
+| `GET` | `/api/admin/withdrawal-requests/pending` | List **pending only** (back-compat; = `?status=pending`) |
+| `GET` | `/api/admin/withdrawal-requests/{id}` | Single withdrawal detail (review modals) |
 | `PUT` | `/api/admin/withdrawal-requests/{id}/approve` | Approve (manual flow) |
 | `PUT` | `/api/admin/withdrawal-requests/{id}/reject` | Reject + return balance |
 | `PUT` | `/api/admin/withdrawal-requests/{id}/mark-paid` | Manual mark-paid fallback |
 | `PUT` | `/api/admin/withdrawal-requests/{id}/refresh-payout-status` | Query PayOS for latest state |
 | `POST` | `/api/admin/withdrawal-requests/{id}/retry-payout` | Retry failed payout |
 | `GET` | `/api/admin/withdrawal-requests/{id}/receipt` | View receipt |
+
+### GET /api/admin/withdrawal-requests (full list)
+Query: `?status=...&pageNumber=1&pageSize=10`. `status` accepts any of
+`pending | approved | processing | paid | rejected | failed | cancelled`.
+An unknown status returns `400 COMMON_VALIDATION_ERROR`. Omit `status` to list every withdrawal.
+The older `/pending` route is retained for backward compatibility.
+
+### GET /api/admin/withdrawal-requests/{id} (detail)
+Returns `WithdrawalRequestResponse` for review modals (distinct from `/receipt`).
+`404 WITHDRAWAL_REQUEST_NOT_FOUND` if missing.
 
 ### mark-paid safety
 Blocked if `status = processing` AND `payOsPayoutId` is set — prevents double payment.
@@ -157,3 +173,18 @@ The receipt always contains:
 - Retry uses a unique key: `{id}-retry-{timestamp}`.
 - Wallet is locked with `GetByCoachIdForUpdateAsync` to prevent concurrent overspend.
 - If PayOS call times out (no response), withdrawal stays `processing` and the failure reason is recorded. Use `refresh-payout-status` to reconcile.
+
+## Balance invariants
+
+Funds reserved at creation (`Available → Pending`) should always cover the amount when later
+released or returned. Every operation that subtracts from `PendingBalance` — **reject**, **mark-paid /
+finalize**, and **rollback on failure** — first asserts `PendingBalance >= amount`. If old or
+concurrently-mutated data would otherwise push the balance negative, the operation fails with
+`409 INSUFFICIENT_WALLET_BALANCE` instead of writing a negative `PendingBalance`.
+
+| Operation | Wallet effect |
+|-----------|---------------|
+| Create | `Available -= amount`, `Pending += amount` |
+| Reject / Fail | `Pending -= amount`, `Available += amount` (guarded) |
+| Mark paid / payout success | `Pending -= amount`, `TotalWithdrawn += amount` (guarded), one debit ledger row |
+| Retry (failed → processing) | `Available -= amount`, `Pending += amount`, new idempotency key |

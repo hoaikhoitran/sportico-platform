@@ -27,6 +27,48 @@ See [08 — Payment and Wallet](../08-payment-and-wallet.md#payos-payment-flow) 
     - anything else → ignored.
 - **Errors**: `400 COMMON_VALIDATION_ERROR` (invalid signature, or missing `orderCode`); `404 PAYMENT_NOT_FOUND`; `404 BOOKING_NOT_FOUND`.
 
+## POST /api/payments/payos/reconcile  *(and `POST /api/payments/payos/{orderCode}/reconcile`)*
+Learner-initiated reconciliation after returning from the PayOS checkout. The webhook is the
+primary activation path; reconcile is the **fallback** for when the webhook is delayed or never
+arrives (so a learner who has paid is not stuck on a `pending_payment` booking).
+
+- **Role**: `learner` (authenticated). The service verifies the payment belongs to the caller.
+- **Body** (`ReconcilePayOsRequest`) — supply either field (the `{orderCode}` route variant fills `orderCode`):
+```json
+{ "orderCode": 1716800000000, "paymentId": null }
+```
+- **Behaviour**:
+  1. Loads the payment by `orderCode` or `paymentId`; `404 PAYMENT_NOT_FOUND` if missing.
+  2. Ownership guard: `403 COMMON_FORBIDDEN` if the payment is not the caller's.
+  3. If already `paid` + booking `active` → returns idempotent success **without** calling PayOS.
+  4. If still `pending` → calls PayOS `GET {BaseUrl}/v2/payment-requests/{orderCode}` and acts on the **real** state:
+     - `PAID` → activates the booking (same idempotent path as the webhook).
+     - `CANCELLED` / `EXPIRED` → Payment `cancelled`/`failed`, pending Booking `cancelled`.
+     - `PENDING` / `PROCESSING` → no activation; returns the current status so the client can retry.
+- **Never** trusts a frontend `status=PAID` / `code=00` query string — it only triggers this backend verification.
+- **Response** (`Result<ReconcilePayOsResponse>`):
+```json
+{
+  "isSuccess": true,
+  "data": {
+    "paymentId": "…", "orderCode": 1716800000000,
+    "paymentStatus": "paid", "bookingId": "…", "bookingStatus": "active",
+    "activated": true, "payOsStatus": "PAID",
+    "message": "Payment confirmed by PayOS. Booking is now active."
+  },
+  "error": null
+}
+```
+- **Errors**: `400 COMMON_VALIDATION_ERROR` (neither `orderCode` nor `paymentId`; or payment has no `orderCode`); `403 COMMON_FORBIDDEN`; `404 PAYMENT_NOT_FOUND` / `BOOKING_NOT_FOUND`; `409` when the payment is not a PayOS payment.
+
+### Frontend integration (success / fail pages)
+The repository is backend-only; the frontend should implement:
+- **`payment/success`**: read `orderCode` (or `paymentId`) from the query string, show `Đang xác nhận thanh toán...`, then `POST /api/payments/payos/{orderCode}/reconcile`.
+  - If `data.activated == true` (booking `active`) → redirect to the booking detail / learner dashboard.
+  - If still pending → show `Thanh toán đang được xác nhận, vui lòng thử đồng bộ lại sau` and a `Đồng bộ lại thanh toán` button that re-calls reconcile.
+  - Do **not** treat a `status=PAID` query string as final success.
+- **`payment/fail`**: call reconcile once to settle the record; show the cancelled/failed state.
+
 ## Signature Verification
 `VerifyWebhookSignature` recomputes HMAC-SHA256 over the **canonical** `data`:
 - object keys sorted ascending (ordinal),

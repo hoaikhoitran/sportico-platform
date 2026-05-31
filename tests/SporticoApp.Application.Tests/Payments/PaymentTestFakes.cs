@@ -1,0 +1,203 @@
+using FluentValidation;
+using SporticoApp.Application.DTOs.Bookings;
+using SporticoApp.Application.DTOs.Notifications;
+using SporticoApp.Application.DTOs.Payments;
+using SporticoApp.Application.DTOs.TrainingPackages;
+using SporticoApp.Application.Interfaces.Repositories;
+using SporticoApp.Application.Interfaces.Services;
+using SporticoApp.Core.Entities;
+
+namespace SporticoApp.Application.Tests.Payments;
+
+/// <summary>FluentValidation stub that always passes — keeps service tests focused on logic.</summary>
+internal sealed class PassValidator<T> : AbstractValidator<T>
+{
+}
+
+internal sealed class FakeBookingRepository : IBookingRepository
+{
+    public Booking? Stored;
+    public int SaveCount;
+    public readonly List<Booking> Added = new();
+
+    public FakeBookingRepository(Booking? stored = null) => Stored = stored;
+
+    private Booking? Match(Guid id) => Stored != null && Stored.Id == id ? Stored : null;
+
+    public Task<Booking?> GetByIdAsync(Guid id) => Task.FromResult(Match(id));
+    public Task<Booking?> GetByIdForUpdateAsync(Guid id) => Task.FromResult(Match(id));
+    public Task<Booking?> GetByIdWithTrainingPackageAsync(Guid id) => Task.FromResult(Match(id));
+
+    public Task AddWithoutSaveAsync(Booking booking)
+    {
+        Added.Add(booking);
+        Stored ??= booking;
+        return Task.CompletedTask;
+    }
+
+    public Task AddAsync(Booking booking)
+    {
+        Added.Add(booking);
+        Stored ??= booking;
+        return Task.CompletedTask;
+    }
+
+    public Task SaveChangesAsync()
+    {
+        SaveCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task<Booking?> GetByIdForLearnerAsync(Guid learnerId, Guid id) => throw new NotImplementedException();
+    public Task<Booking?> GetByIdForCoachAsync(Guid coachId, Guid id) => throw new NotImplementedException();
+    public Task<Booking?> GetByIdForLearnerForUpdateAsync(Guid learnerId, Guid id) => throw new NotImplementedException();
+    public Task<Booking?> GetByIdForCoachForUpdateAsync(Guid coachId, Guid id) => throw new NotImplementedException();
+    public Task<(List<Booking> Items, int TotalCount)> GetPagedByLearnerAsync(Guid learnerId, BookingFilterRequest filter) => throw new NotImplementedException();
+    public Task<(List<Booking> Items, int TotalCount)> GetPagedByCoachAsync(Guid coachId, BookingFilterRequest filter) => throw new NotImplementedException();
+    public Task<(List<Booking> Items, int TotalCount)> GetPagedAsync(BookingFilterRequest filter) => throw new NotImplementedException();
+    public Task<Booking?> GetActiveOrCompletedBetweenUsersAsync(Guid learnerId, Guid coachId) => throw new NotImplementedException();
+}
+
+internal sealed class FakePaymentRepository : IPaymentRepository
+{
+    public Payment? Stored;
+    public int TransactionCount;
+    public int SaveCount;
+    public readonly List<Payment> Added = new();
+
+    public FakePaymentRepository(Payment? stored = null) => Stored = stored;
+
+    public Task<Payment?> GetByIdForUpdateAsync(Guid id)
+        => Task.FromResult(Stored != null && Stored.Id == id ? Stored : null);
+
+    public Task<Payment?> GetByOrderCodeForUpdateAsync(long orderCode)
+        => Task.FromResult(Stored != null && Stored.OrderCode == orderCode ? Stored : null);
+
+    public Task AddTransactionWithoutSaveAsync(PaymentTransaction transaction)
+    {
+        TransactionCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task AddWithoutSaveAsync(Payment payment)
+    {
+        Added.Add(payment);
+        Stored ??= payment;
+        return Task.CompletedTask;
+    }
+
+    public Task AddAsync(Payment payment)
+    {
+        Added.Add(payment);
+        Stored ??= payment;
+        return Task.CompletedTask;
+    }
+
+    public Task SaveChangesAsync()
+    {
+        SaveCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task<Payment?> GetLatestByReferenceAsync(string referenceType, Guid referenceId) => throw new NotImplementedException();
+    public Task<Payment?> GetLatestByReferenceForUpdateAsync(string referenceType, Guid referenceId) => throw new NotImplementedException();
+}
+
+internal sealed class FakeCoachWalletRepository : ICoachWalletRepository
+{
+    public CoachWallet? Wallet;
+    public int WalletCreatedCount;
+
+    public FakeCoachWalletRepository(CoachWallet? wallet = null) => Wallet = wallet;
+
+    public Task<CoachWallet?> GetByCoachIdAsync(Guid coachId)
+        => Task.FromResult(Wallet != null && Wallet.CoachId == coachId ? Wallet : null);
+
+    public Task AddAsync(CoachWallet wallet)
+    {
+        Wallet = wallet;
+        WalletCreatedCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task<CoachWallet?> GetByCoachIdForUpdateAsync(Guid coachId)
+        => Task.FromResult(Wallet != null && Wallet.CoachId == coachId ? Wallet : null);
+
+    public Task AddWithoutSaveAsync(CoachWallet wallet)
+    {
+        Wallet = wallet;
+        WalletCreatedCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task<(List<CoachWalletTransaction> Items, int TotalCount)> GetTransactionsPagedAsync(
+        Guid coachId, SporticoApp.Application.DTOs.Wallets.CoachWalletTransactionFilterRequest filter)
+        => throw new NotImplementedException();
+
+    public Task AddTransactionWithoutSaveAsync(CoachWalletTransaction transaction) => throw new NotImplementedException();
+    public Task SaveChangesAsync() => Task.CompletedTask;
+}
+
+internal sealed class FakeNotificationRepository : INotificationRepository
+{
+    public int Count;
+    public readonly List<Notification> Notifications = new();
+
+    public Task AddWithoutSaveAsync(Notification notification)
+    {
+        Count++;
+        Notifications.Add(notification);
+        return Task.CompletedTask;
+    }
+
+    public Task SaveChangesAsync() => Task.CompletedTask;
+
+    public Task<(List<Notification> Items, int TotalCount)> GetPagedByUserIdAsync(Guid userId, NotificationFilterRequest filter) => throw new NotImplementedException();
+    public Task<int> GetUnreadCountAsync(Guid userId) => throw new NotImplementedException();
+    public Task<Notification?> GetByIdForUpdateAsync(Guid userId, Guid notificationId) => throw new NotImplementedException();
+    public Task<List<Notification>> GetUnreadForUpdateAsync(Guid userId) => throw new NotImplementedException();
+}
+
+internal sealed class FakePayOsService : IPayOsService
+{
+    public PayOsPaymentStatusResult StatusResult = new();
+    public int GetStatusCallCount;
+    public bool SignatureValid = true;
+
+    public Task<PayOsPaymentStatusResult> GetPaymentStatusAsync(long orderCode)
+    {
+        GetStatusCallCount++;
+        StatusResult.OrderCode = orderCode;
+        return Task.FromResult(StatusResult);
+    }
+
+    public Task<CreatePayOsPaymentResult> CreatePaymentLinkAsync(CreatePayOsPaymentRequest request)
+        => Task.FromResult(new CreatePayOsPaymentResult
+        {
+            PaymentLinkId = "link-1",
+            CheckoutUrl = "https://pay.example/checkout/1",
+            ExpiredAt = DateTime.UtcNow.AddMinutes(15)
+        });
+
+    public bool VerifyWebhookSignature(object data, string signature) => SignatureValid;
+}
+
+internal sealed class FakeTrainingPackageRepository : ITrainingPackageRepository
+{
+    public TrainingPackage? Stored;
+
+    public FakeTrainingPackageRepository(TrainingPackage? stored = null) => Stored = stored;
+
+    public Task<TrainingPackage?> GetByIdAsync(Guid id)
+        => Task.FromResult(Stored != null && Stored.Id == id ? Stored : null);
+
+    public Task<TrainingPackage?> GetByIdWithCoachAsync(Guid id) => throw new NotImplementedException();
+    public Task<(List<TrainingPackage> Items, int TotalCount)> GetPagedWithCoachAsync(TrainingPackageFilterRequest filter) => throw new NotImplementedException();
+    public Task<TrainingPackage?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
+    public Task<TrainingPackage?> GetOwnedByIdAsync(Guid coachId, Guid id) => throw new NotImplementedException();
+    public Task<TrainingPackage?> GetOwnedByIdForUpdateAsync(Guid coachId, Guid id) => throw new NotImplementedException();
+    public Task<(List<TrainingPackage> Items, int TotalCount)> GetPagedAsync(TrainingPackageFilterRequest filter) => throw new NotImplementedException();
+    public Task AddAsync(TrainingPackage trainingPackage) => throw new NotImplementedException();
+    public Task AddWithoutSaveAsync(TrainingPackage trainingPackage) => throw new NotImplementedException();
+    public Task SaveChangesAsync() => Task.CompletedTask;
+}

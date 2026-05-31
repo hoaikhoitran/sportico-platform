@@ -156,9 +156,18 @@ POST /api/coaches/me/withdrawal-requests   (coach)
 { "amount": 106250 }
 → status "pending"; wallet Available → Pending
 
+GET  /api/admin/withdrawal-requests                  (admin)  → all withdrawals
+GET  /api/admin/withdrawal-requests?status=pending   (admin)  → filter to pending
+GET  /api/admin/withdrawal-requests?status=paid       (admin)  → filter to paid (after mark-paid below)
+GET  /api/admin/withdrawal-requests?status=bogus     (admin)  → 400 COMMON_VALIDATION_ERROR
+GET  /api/admin/withdrawal-requests/{id}             (admin)  → single detail (review modal)
+GET  /api/coaches/me/withdrawal-requests/{id}        (coach)  → own detail (403 for another coach's id)
+
 PUT  /api/admin/withdrawal-requests/{id}/approve     (admin)  → "approved"
 PUT  /api/admin/withdrawal-requests/{id}/mark-paid   (admin)  → "paid"; ledger debit, totalWithdrawn += 106250
 ```
+- Filtering by every status (`pending|approved|processing|paid|rejected|failed|cancelled`) returns only that status; unknown status → `400`.
+- Rejecting (instead of mark-paid) returns Pending → Available; a `processing` withdrawal cannot be rejected or marked paid manually.
 
 ### 16. Notification test
 ```
@@ -186,6 +195,27 @@ POST /api/payments/payos/webhook   (anonymous)
 - Valid signature + `status: "paid"` → booking becomes `active`.
 - Invalid/missing signature → `400` (`COMMON_VALIDATION_ERROR`, "Invalid webhook signature"). The verifier is fail-closed.
 
+### 18. PayOS reconcile test (webhook fallback)
+Simulates the success page settling a payment when the webhook never ran.
+```
+POST /api/bookings/purchase/payos   (learner)
+→ { bookingId, paymentId, orderCode, ... }; booking "pending_payment"
+
+# Without the webhook firing, the coach's create-plan is correctly blocked:
+POST /api/bookings/{bookingId}/training-plan   (coach)  → 409 BOOKING_NOT_ACTIVE
+
+# Learner success page reconciles (backend re-checks PayOS, never trusts ?status=PAID):
+POST /api/payments/payos/{orderCode}/reconcile   (learner)
+→ if PayOS reports PAID: { activated: true, bookingStatus: "active", paymentStatus: "paid" }
+→ if still pending:       { activated: false, bookingStatus: "pending_payment" }  (retry later)
+
+# After activation, the coach can create the plan:
+POST /api/bookings/{bookingId}/training-plan   (coach)  → 200
+```
+- Reconcile is idempotent: calling it again after the webhook already activated returns
+  `activated: true` and does **not** duplicate notifications/wallet (no PayOS call is made).
+- Ownership: reconciling another learner's `orderCode` → `403 COMMON_FORBIDDEN`.
+
 ## Pass Criteria
 
 - Commission fields exactly match the formula (step 5).
@@ -193,3 +223,6 @@ POST /api/payments/payos/webhook   (anonymous)
 - After all 8 completions the booking becomes `completed`.
 - Chat blocked without an active/completed booking; allowed with one.
 - Withdrawal moves money Available → Pending → TotalWithdrawn correctly.
+- Admin withdrawal list returns every status and filters correctly; unknown status → `400`.
+- Reconcile activates a paid-but-unactivated booking, is idempotent with the webhook, and enforces ownership.
+- Coach create-plan stays `409 BOOKING_NOT_ACTIVE` while `pending_payment`, and succeeds once `active` (the rule is never relaxed).

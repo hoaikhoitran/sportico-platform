@@ -246,12 +246,6 @@ namespace SporticoApp.Application.Services
 
             if (string.Equals(status, "paid", StringComparison.OrdinalIgnoreCase))
             {
-                if (payment.Status != PaymentStatuses.Paid)
-                {
-                    payment.Status = PaymentStatuses.Paid;
-                    payment.PaidAt = DateTime.UtcNow;
-                }
-
                 var bookingId = payment.ReferenceId;
                 if (!bookingId.HasValue)
                 {
@@ -268,21 +262,7 @@ namespace SporticoApp.Application.Services
                         "Booking not found");
                 }
 
-                var shouldNotify = booking.Status != BookingStatuses.Active;
-
-                if (shouldNotify)
-                {
-                    booking.Status = BookingStatuses.Active;
-                    booking.PaidAt = DateTime.UtcNow;
-                    booking.ExpiresAt = booking.PaidAt.Value.AddDays(booking.TrainingPackage.DurationDays);
-                }
-
-                await _bookingRepository.SaveChangesAsync();
-
-                if (shouldNotify)
-                {
-                    await EnsureBookingActivatedAsync(booking, true);
-                }
+                await ActivatePaidBookingAsync(payment, booking, source: "webhook");
 
                 return Result<object>.Success(new { status = "ok" });
             }
@@ -313,6 +293,127 @@ namespace SporticoApp.Application.Services
             await _paymentRepository.SaveChangesAsync();
 
             return Result<object>.Success(new { status = "ignored" });
+        }
+
+        public async Task<Result<ReconcilePayOsResponse>> ReconcilePayOsAsync(
+            Guid learnerId,
+            ReconcilePayOsRequest request)
+        {
+            if (request.OrderCode is null && request.PaymentId is null)
+            {
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Either orderCode or paymentId is required");
+            }
+
+            var payment = request.PaymentId.HasValue
+                ? await _paymentRepository.GetByIdForUpdateAsync(request.PaymentId.Value)
+                : await _paymentRepository.GetByOrderCodeForUpdateAsync(request.OrderCode!.Value);
+
+            if (payment == null)
+            {
+                throw new NotFoundException(ErrorCodes.PaymentNotFound, "Payment not found");
+            }
+
+            // Ownership guard — a learner may only reconcile their own payment.
+            if (payment.UserId != learnerId)
+            {
+                throw new ForbiddenException(
+                    ErrorCodes.Forbidden,
+                    "You do not have access to this payment");
+            }
+
+            if (payment.Method != PaymentMethods.PayOs)
+            {
+                throw new ConflictException(
+                    ErrorCodes.ValidationError,
+                    "Payment is not a PayOS payment");
+            }
+
+            var bookingId = payment.ReferenceId;
+            var booking = bookingId.HasValue
+                ? await _bookingRepository.GetByIdForUpdateAsync(bookingId.Value)
+                : null;
+
+            // ── Already settled: idempotent success, no PayOS call needed ─────────
+            if (payment.Status == PaymentStatuses.Paid &&
+                booking != null &&
+                booking.Status == BookingStatuses.Active)
+            {
+                return Result<ReconcilePayOsResponse>.Success(
+                    BuildReconcileResponse(payment, booking, payOsStatus: null,
+                        "Payment already confirmed. Booking is active."));
+            }
+
+            // ── Terminal failure already recorded ─────────────────────────────────
+            if (payment.Status == PaymentStatuses.Cancelled ||
+                payment.Status == PaymentStatuses.Failed)
+            {
+                return Result<ReconcilePayOsResponse>.Success(
+                    BuildReconcileResponse(payment, booking, payOsStatus: null,
+                        "Payment was cancelled or failed."));
+            }
+
+            // ── Verify the real state against PayOS (never the frontend query string) ──
+            if (!payment.OrderCode.HasValue)
+            {
+                throw new ConflictException(
+                    ErrorCodes.ValidationError,
+                    "Payment has no PayOS orderCode to reconcile");
+            }
+
+            var payOs = await _payOsService.GetPaymentStatusAsync(payment.OrderCode.Value);
+            var payOsStatus = payOs.Status; // PAID | PENDING | PROCESSING | CANCELLED | EXPIRED
+
+            if (string.Equals(payOsStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+            {
+                if (booking == null)
+                {
+                    throw new NotFoundException(ErrorCodes.BookingNotFound, "Booking not found");
+                }
+
+                // Audit the gateway response, then activate idempotently.
+                await _paymentRepository.AddTransactionWithoutSaveAsync(new PaymentTransaction
+                {
+                    Id = Guid.NewGuid(),
+                    payment_id = payment.Id,
+                    GatewayResponse = payOs.RawJson,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                await ActivatePaidBookingAsync(payment, booking, source: "reconcile");
+
+                return Result<ReconcilePayOsResponse>.Success(
+                    BuildReconcileResponse(payment, booking, payOsStatus,
+                        "Payment confirmed by PayOS. Booking is now active."));
+            }
+
+            if (string.Equals(payOsStatus, "CANCELLED", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(payOsStatus, "EXPIRED", StringComparison.OrdinalIgnoreCase))
+            {
+                payment.Status = string.Equals(payOsStatus, "EXPIRED", StringComparison.OrdinalIgnoreCase)
+                    ? PaymentStatuses.Failed
+                    : PaymentStatuses.Cancelled;
+
+                if (booking != null && booking.Status == BookingStatuses.PendingPayment)
+                {
+                    booking.Status = BookingStatuses.Cancelled;
+                    booking.CancelledAt = DateTime.UtcNow;
+                    booking.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await _bookingRepository.SaveChangesAsync();
+
+                return Result<ReconcilePayOsResponse>.Success(
+                    BuildReconcileResponse(payment, booking, payOsStatus,
+                        "PayOS reports the payment was cancelled or expired."));
+            }
+
+            // PENDING / PROCESSING / unknown — PayOS has not confirmed payment yet.
+            // Do NOT activate; return the current status so the learner can retry.
+            return Result<ReconcilePayOsResponse>.Success(
+                BuildReconcileResponse(payment, booking, payOsStatus,
+                    "Payment is still being confirmed. Please try syncing again shortly."));
         }
 
         public async Task<Result<PagedResult<BookingResponse>>> GetMyBookingsAsync(
@@ -464,6 +565,57 @@ namespace SporticoApp.Application.Services
             };
         }
 
+        /// <summary>
+        /// Shared, idempotent activation for a paid booking. Safe to call from both the
+        /// PayOS webhook and the reconcile endpoint; if the booking is already active it
+        /// performs no duplicate side effects (no extra notifications, wallet creation, etc.).
+        ///
+        /// Requires <paramref name="booking"/> to be a tracked entity with TrainingPackage
+        /// loaded (used to compute ExpiresAt) and <paramref name="payment"/> to be tracked.
+        /// </summary>
+        /// <param name="source">Audit hint: "webhook" or "reconcile".</param>
+        private async Task ActivatePaidBookingAsync(Payment payment, Booking booking, string source)
+        {
+            var alreadyActive = booking.Status == BookingStatuses.Active;
+
+            // Payment is always reconciled to paid (idempotent — no-op if already paid).
+            if (payment.Status != PaymentStatuses.Paid)
+            {
+                payment.Status = PaymentStatuses.Paid;
+            }
+
+            payment.PaidAt ??= DateTime.UtcNow;
+
+            if (!alreadyActive)
+            {
+                if (booking.TrainingPackage == null)
+                {
+                    // Both callers Include the package; guard defensively rather than NRE → 500.
+                    throw new FailureException(
+                        ErrorCodes.BookingNotFound,
+                        "Booking training package is not loaded; cannot activate booking");
+                }
+
+                var paidAt = DateTime.UtcNow;
+                booking.Status = BookingStatuses.Active;
+                booking.PaidAt ??= paidAt;
+                booking.ExpiresAt = booking.PaidAt.Value.AddDays(booking.TrainingPackage.DurationDays);
+                booking.UpdatedAt = paidAt;
+
+                // Side effect: ensure the coach wallet exists (idempotent).
+                await EnsureCoachWalletAsync(booking.CoachId);
+            }
+
+            // Persist payment + booking (and any logged PaymentTransaction) in one save.
+            await _bookingRepository.SaveChangesAsync();
+
+            // Side effect: notifications — only on the first transition to active.
+            if (!alreadyActive)
+            {
+                await SendBookingActivatedNotificationsAsync(booking);
+            }
+        }
+
         private async Task EnsureBookingActivatedAsync(Booking booking, bool notify)
         {
             await EnsureCoachWalletAsync(booking.CoachId);
@@ -473,6 +625,11 @@ namespace SporticoApp.Application.Services
                 return;
             }
 
+            await SendBookingActivatedNotificationsAsync(booking);
+        }
+
+        private async Task SendBookingActivatedNotificationsAsync(Booking booking)
+        {
             await _notificationRepository.AddWithoutSaveAsync(new Notification
             {
                 Id = Guid.NewGuid(),
@@ -494,6 +651,25 @@ namespace SporticoApp.Application.Services
             });
 
             await _notificationRepository.SaveChangesAsync();
+        }
+
+        private static ReconcilePayOsResponse BuildReconcileResponse(
+            Payment payment,
+            Booking? booking,
+            string? payOsStatus,
+            string message)
+        {
+            return new ReconcilePayOsResponse
+            {
+                PaymentId = payment.Id,
+                OrderCode = payment.OrderCode,
+                PaymentStatus = payment.Status,
+                BookingId = booking?.Id ?? payment.ReferenceId,
+                BookingStatus = booking?.Status,
+                Activated = booking?.Status == BookingStatuses.Active,
+                PayOsStatus = payOsStatus,
+                Message = message
+            };
         }
 
         private async Task EnsureCoachWalletAsync(Guid coachId)

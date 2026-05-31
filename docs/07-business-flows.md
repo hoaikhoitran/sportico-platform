@@ -37,17 +37,29 @@ Learner POST /api/bookings/purchase/payos
   → Booking status: pending_payment
   → Payment: payos / pending  (+ checkoutUrl, orderCode)
 Learner pays at checkoutUrl
-PayOS → POST /api/payments/payos/webhook
+PayOS → POST /api/payments/payos/webhook        (primary activation path)
   → signature verified
-  → Payment status: paid
-  → Booking status: active (PaidAt set)
-  → Coach wallet ensured, chat room ensured
-  → Notifications: coach + learner
+  → ActivatePaidBookingAsync(payment, booking, "webhook")
+       Payment → paid, Booking → active (PaidAt, ExpiresAt set)
+       Coach wallet ensured; notifications: coach + learner (once)
+
+Fallback if the webhook never arrives:
+Learner success page → POST /api/payments/payos/{orderCode}/reconcile
+  → backend queries PayOS GET /v2/payment-requests/{orderCode}
+  → if PAID → ActivatePaidBookingAsync(payment, booking, "reconcile")  (same idempotent path)
+  → if PENDING/PROCESSING → no activation; client retries ("Đồng bộ lại thanh toán")
 ```
 
 Preconditions for both: package must be `published`, and a learner cannot purchase their own package.
 
-Cancellation/failure (PayOS webhook reports `cancelled`/`failed`): Payment → `cancelled`/`failed`, Booking → `cancelled`.
+Cancellation/failure (PayOS webhook **or** reconcile reports `cancelled`/`failed`/`expired`): Payment → `cancelled`/`failed`, Booking → `cancelled`.
+
+> **Why the coach's `POST /api/bookings/{id}/training-plan` returns 409:** a training plan can only be
+> created for an `active` booking. If a learner paid but the booking is still `pending_payment`, the
+> webhook did not run — the learner reconciles (above) to activate it. Do **not** relax the
+> `active`-booking rule in `TrainingPlanService`. The coach UI should hide/disable the create-plan
+> form unless the booking is `active`, show "Học viên chưa được hệ thống xác nhận thanh toán" for a
+> `pending_payment` booking, and surface a friendly message on a `409 BOOKING_NOT_ACTIVE` response.
 
 ## Session Flow
 
@@ -118,6 +130,14 @@ Admin marks paid         PUT .../{id}/mark-paid → status: paid
      - failed    → Payment failed, Booking cancelled
      - other     → ignored (no state change)
 8. Learner is returned to PayOs ReturnUrl / CancelUrl (frontend pages).
+9. (Fallback) The success page calls POST /api/payments/payos/{orderCode}/reconcile.
+   Backend verifies the real state with PayOS GET /v2/payment-requests/{orderCode}:
+     - PAID              → activate booking (same idempotent path as the webhook)
+     - CANCELLED/EXPIRED → Payment cancelled/failed, Booking cancelled
+     - PENDING/PROCESSING→ no change; client retries
 ```
 
-The webhook is idempotent for the `paid` case: it only re-runs activation side effects (notifications, wallet, chat) when the booking was not already `active`.
+The webhook and reconcile both call `ActivatePaidBookingAsync` and are idempotent for the `paid`
+case: activation side effects (notifications, wallet) run only on the first transition to `active`,
+so the two paths can race or repeat without duplicating effects. Reconcile additionally enforces an
+**ownership guard** — a learner may only reconcile their own payment.

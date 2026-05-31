@@ -4,6 +4,8 @@ namespace SporticoApp.Application.Interfaces.Repositories
 {
     public interface IPaymentRepository
     {
+        Task<Payment?> GetByIdForUpdateAsync(Guid id);
+
         Task<Payment?> GetByOrderCodeForUpdateAsync(long orderCode);
 
         Task<Payment?> GetLatestByReferenceAsync(

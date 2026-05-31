@@ -70,6 +70,25 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return (items, totalCount);
         }
 
+        public async Task<(List<WithdrawalRequest> Items, int TotalCount)> GetPagedAsync(
+            WithdrawalRequestFilterRequest filter)
+        {
+            IQueryable<WithdrawalRequest> query = _context.WithdrawalRequests
+                .AsNoTracking();
+
+            query = ApplyFilter(query, filter);
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query
+                .OrderByDescending(x => x.CreatedAt)
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
         public async Task AddAsync(WithdrawalRequest request)
         {
             _context.WithdrawalRequests.Add(request);

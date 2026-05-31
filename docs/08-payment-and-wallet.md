@@ -116,6 +116,30 @@ Implemented in [PayOsService](../src/SporticoApp.Infrastructure/Services/Payment
 - The body is `{ data, signature }`. Verification (`VerifyWebhookSignature`) is **fail-closed**: it rejects when the signature is missing, the checksum key is missing, or `data` is not a JSON object.
 - The expected signature is HMAC-SHA256 over the canonical form of `data` (keys sorted ascending, `key=value` joined by `&`, the `signature` field excluded), compared in constant time.
 - Status is read from `data.status` (or `code == "00"` ⇒ `paid`). The handler maps `paid`/`cancelled`/`failed` and ignores anything else.
+- On `paid`, the webhook calls the shared **`ActivatePaidBookingAsync(payment, booking, source)`** method.
+
+### Activation is shared and idempotent
+Both the webhook and the reconcile endpoint route through `ActivatePaidBookingAsync`, so activation
+side effects happen **exactly once** no matter how many times (or from which path) activation is
+triggered:
+- Payment → `paid` (`PaidAt` stamped if not already set).
+- Booking → `active`, `PaidAt`, `ExpiresAt = PaidAt + TrainingPackage.DurationDays`.
+- Coach wallet is ensured to exist.
+- "New booking" / "booking active" notifications are sent **only on the first transition** to active.
+
+If the booking is already `active`, the method is a no-op for side effects — re-running webhook +
+reconcile cannot double-notify, double-create the wallet, or re-stamp timestamps.
+
+### Reconcile (webhook fallback)
+- Endpoint: `POST /api/payments/payos/reconcile` (also `POST /api/payments/payos/{orderCode}/reconcile`), role `learner`.
+- Root cause it fixes: if the PayOS webhook never reaches the backend, the booking stays
+  `pending_payment` even though the learner paid — which then makes the coach's
+  `POST /api/bookings/{id}/training-plan` return `409 BOOKING_NOT_ACTIVE`. The 409 is correct;
+  the bug is the un-activated booking. Reconcile lets the learner's success page actively settle it.
+- The endpoint verifies the **real** state with PayOS (`GET /v2/payment-requests/{orderCode}`) and only
+  activates when PayOS confirms `PAID`. A frontend `status=PAID` / `code=00` query string is never
+  trusted as final — it only triggers this backend verification.
+- See [api/payments.md](api/payments.md) for the request/response contract and the frontend success/fail flow.
 
 ### No automatic bank transfer in MVP
 There is **no real disbursement integration**. Coach payouts are recorded by the admin "mark paid" action after performing the transfer through an external/manual channel. PayOS is used only for **inbound** learner payments.

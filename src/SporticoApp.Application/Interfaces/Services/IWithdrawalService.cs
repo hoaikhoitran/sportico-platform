@@ -13,8 +13,18 @@ namespace SporticoApp.Application.Interfaces.Services
             Guid coachId,
             WithdrawalRequestFilterRequest filter);
 
+        /// <summary>Coach: get one of their own withdrawal requests (ownership enforced).</summary>
+        Task<Result<WithdrawalRequestResponse>> GetMyByIdAsync(Guid coachId, Guid id);
+
         Task<Result<PagedResult<WithdrawalRequestResponse>>> GetPendingAsync(
             WithdrawalRequestFilterRequest filter);
+
+        /// <summary>Admin: list all withdrawal requests, optionally filtered by any status.</summary>
+        Task<Result<PagedResult<WithdrawalRequestResponse>>> GetAllAsync(
+            WithdrawalRequestFilterRequest filter);
+
+        /// <summary>Admin: get a single withdrawal request by id (for review modals).</summary>
+        Task<Result<WithdrawalRequestResponse>> GetByIdAdminAsync(Guid id);
 
         Task<Result<WithdrawalRequestResponse>> ApproveAsync(Guid adminId, Guid id);
 

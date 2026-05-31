@@ -13,6 +13,12 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             _context = context;
         }
 
+        public async Task<Payment?> GetByIdForUpdateAsync(Guid id)
+        {
+            return await _context.Payments
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
         public async Task<Payment?> GetByOrderCodeForUpdateAsync(long orderCode)
         {
             return await _context.Payments

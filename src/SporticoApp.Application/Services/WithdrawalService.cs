@@ -33,6 +33,18 @@ namespace SporticoApp.Application.Services
         private readonly bool _autoPayoutEnabled;
         private readonly string _payoutCategory;
 
+        // Status values accepted by the admin "all withdrawals" status filter.
+        private static readonly HashSet<string> WithdrawalStatusFilters = new(StringComparer.OrdinalIgnoreCase)
+        {
+            WithdrawalRequestStatuses.Pending,
+            WithdrawalRequestStatuses.Approved,
+            WithdrawalRequestStatuses.Processing,
+            WithdrawalRequestStatuses.Paid,
+            WithdrawalRequestStatuses.Rejected,
+            WithdrawalRequestStatuses.Failed,
+            WithdrawalRequestStatuses.Cancelled
+        };
+
         public WithdrawalService(
             ICoachRepository coachRepository,
             ICoachPayoutAccountRepository payoutAccountRepository,
@@ -174,7 +186,30 @@ namespace SporticoApp.Application.Services
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // Admin: list pending / all withdrawal requests
+        // Coach: get one of their own withdrawal requests
+        // ─────────────────────────────────────────────────────────────────────
+        public async Task<Result<WithdrawalRequestResponse>> GetMyByIdAsync(Guid coachId, Guid id)
+        {
+            var withdrawal = await _withdrawalRepository.GetByIdAsync(id);
+            if (withdrawal == null)
+            {
+                throw new NotFoundException(
+                    ErrorCodes.WithdrawalRequestNotFound,
+                    "Withdrawal request not found");
+            }
+
+            if (withdrawal.CoachId != coachId)
+            {
+                throw new ForbiddenException(
+                    ErrorCodes.Forbidden,
+                    "You do not have access to this withdrawal");
+            }
+
+            return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Admin: list pending withdrawal requests (kept for backward compatibility)
         // ─────────────────────────────────────────────────────────────────────
         public async Task<Result<PagedResult<WithdrawalRequestResponse>>> GetPendingAsync(
             WithdrawalRequestFilterRequest filter)
@@ -195,6 +230,59 @@ namespace SporticoApp.Application.Services
                 filter.PageSize);
 
             return Result<PagedResult<WithdrawalRequestResponse>>.Success(response);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Admin: list all withdrawal requests, optionally filtered by status
+        // ─────────────────────────────────────────────────────────────────────
+        public async Task<Result<PagedResult<WithdrawalRequestResponse>>> GetAllAsync(
+            WithdrawalRequestFilterRequest filter)
+        {
+            var validationResult = await _filterValidator.ValidateAsync(filter);
+            if (!validationResult.IsValid)
+            {
+                var details = validationResult.Errors.Select(x => x.ErrorMessage).ToList();
+                throw new ValidationException(ErrorCodes.ValidationError, "Invalid request data", details);
+            }
+
+            // Reject unknown status values so callers get a clear 400 instead of an empty page.
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+            {
+                var normalized = filter.Status.Trim().ToLowerInvariant();
+                if (!WithdrawalStatusFilters.Contains(normalized))
+                {
+                    throw new ValidationException(
+                        ErrorCodes.ValidationError,
+                        "Invalid withdrawal status filter",
+                        new List<string> { $"Allowed statuses: {string.Join(", ", WithdrawalStatusFilters)}" });
+                }
+            }
+
+            var (items, totalCount) = await _withdrawalRepository.GetPagedAsync(filter);
+
+            var response = new PagedResult<WithdrawalRequestResponse>(
+                items.Select(x => x.ToResponse()).ToList(),
+                totalCount,
+                filter.PageNumber,
+                filter.PageSize);
+
+            return Result<PagedResult<WithdrawalRequestResponse>>.Success(response);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Admin: get a single withdrawal request by id (review modals)
+        // ─────────────────────────────────────────────────────────────────────
+        public async Task<Result<WithdrawalRequestResponse>> GetByIdAdminAsync(Guid id)
+        {
+            var withdrawal = await _withdrawalRepository.GetByIdAsync(id);
+            if (withdrawal == null)
+            {
+                throw new NotFoundException(
+                    ErrorCodes.WithdrawalRequestNotFound,
+                    "Withdrawal request not found");
+            }
+
+            return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
         }
 
         // ─────────────────────────────────────────────────────────────────────
@@ -280,6 +368,7 @@ namespace SporticoApp.Application.Services
             }
 
             // Return reserved funds to AvailableBalance.
+            EnsureSufficientPendingBalance(wallet, withdrawal.Amount);
             wallet.PendingBalance -= withdrawal.Amount;
             wallet.AvailableBalance += withdrawal.Amount;
             wallet.UpdatedAt = DateTime.UtcNow;
@@ -624,6 +713,7 @@ namespace SporticoApp.Application.Services
             // Release PendingBalance and record payout debit.
             // AvailableBalance was already decreased at withdrawal creation;
             // do NOT subtract it again here.
+            EnsureSufficientPendingBalance(wallet, withdrawal.Amount);
             wallet.PendingBalance -= withdrawal.Amount;
             wallet.TotalWithdrawn += withdrawal.Amount;
             wallet.UpdatedAt = DateTime.UtcNow;
@@ -671,6 +761,7 @@ namespace SporticoApp.Application.Services
 
             // PayOS payout failed or was rejected, so reserved funds are returned to
             // withdrawable balance.
+            EnsureSufficientPendingBalance(wallet, withdrawal.Amount);
             wallet.PendingBalance -= withdrawal.Amount;
             wallet.AvailableBalance += withdrawal.Amount;
             wallet.UpdatedAt = DateTime.UtcNow;
@@ -685,6 +776,23 @@ namespace SporticoApp.Application.Services
             await NotifyCoachAsync(withdrawal.CoachId,
                 "Withdrawal failed",
                 $"Your withdrawal could not be processed: {reason}");
+        }
+
+        /// <summary>
+        /// Guards every PendingBalance subtraction. The invariant is that funds were reserved
+        /// (Available → Pending) at creation, so PendingBalance should always cover the amount.
+        /// If old/corrupt data or a concurrent update violates this, fail with 409 rather than
+        /// writing a negative balance.
+        /// </summary>
+        private static void EnsureSufficientPendingBalance(CoachWallet wallet, decimal amount)
+        {
+            if (wallet.PendingBalance < amount)
+            {
+                throw new ConflictException(
+                    ErrorCodes.InsufficientWalletBalance,
+                    "Wallet pending balance is lower than the withdrawal amount. " +
+                    "Refusing the operation to avoid a negative wallet balance.");
+            }
         }
 
         private async Task NotifyCoachAsync(Guid coachId, string title, string content)

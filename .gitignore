@@ -187,3 +187,5 @@ temp/
 *.local.mcp.json
 .claude/
 .cursor/
+.agents/
+skills-lock.jsons

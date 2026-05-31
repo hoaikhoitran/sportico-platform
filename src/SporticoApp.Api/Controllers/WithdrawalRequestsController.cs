@@ -41,6 +41,16 @@ namespace SporticoApp.Api.Controllers
             return Ok(result);
         }
 
+        [HttpGet("api/coaches/me/withdrawal-requests/{id:guid}")]
+        [Authorize(Roles = RoleConstants.Coach)]
+        [ProducesResponseType(typeof(Result<WithdrawalRequestResponse>), 200)]
+        public async Task<IActionResult> GetMyById(Guid id)
+        {
+            var coachId = User.GetUserId();
+            var result = await _withdrawalService.GetMyByIdAsync(coachId, id);
+            return Ok(result);
+        }
+
         [HttpGet("api/coaches/me/withdrawal-requests/{id:guid}/receipt")]
         [Authorize(Roles = RoleConstants.Coach)]
         [ProducesResponseType(typeof(Result<WithdrawalReceiptResponse>), 200)]
@@ -53,12 +63,33 @@ namespace SporticoApp.Api.Controllers
 
         // ── Admin endpoints ───────────────────────────────────────────────────
 
+        // Full admin list with status filtering across every status.
+        [HttpGet("api/admin/withdrawal-requests")]
+        [Authorize(Roles = RoleConstants.Admin)]
+        [ProducesResponseType(typeof(Result<PagedResult<WithdrawalRequestResponse>>), 200)]
+        public async Task<IActionResult> GetAll([FromQuery] WithdrawalRequestFilterRequest filter)
+        {
+            var result = await _withdrawalService.GetAllAsync(filter);
+            return Ok(result);
+        }
+
+        // Kept for backward compatibility — equivalent to GetAll with status=pending.
         [HttpGet("api/admin/withdrawal-requests/pending")]
         [Authorize(Roles = RoleConstants.Admin)]
         [ProducesResponseType(typeof(Result<PagedResult<WithdrawalRequestResponse>>), 200)]
         public async Task<IActionResult> GetPending([FromQuery] WithdrawalRequestFilterRequest filter)
         {
             var result = await _withdrawalService.GetPendingAsync(filter);
+            return Ok(result);
+        }
+
+        // Single withdrawal detail for admin review modals (not the receipt view).
+        [HttpGet("api/admin/withdrawal-requests/{id:guid}")]
+        [Authorize(Roles = RoleConstants.Admin)]
+        [ProducesResponseType(typeof(Result<WithdrawalRequestResponse>), 200)]
+        public async Task<IActionResult> GetByIdAdmin(Guid id)
+        {
+            var result = await _withdrawalService.GetByIdAdminAsync(id);
             return Ok(result);
         }
 
