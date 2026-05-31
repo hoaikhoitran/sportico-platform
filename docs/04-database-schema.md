@@ -53,6 +53,22 @@ Wallet balances (`coach_wallets`) and transaction amounts are likewise decimal. 
 - Indexes on `(reference_type, reference_id)`, `status`, `user_id`, `created_at` (desc).
 - Check constraints: `method IN ('manual','payos')`, `status IN ('pending','paid','failed','cancelled')`.
 
+### reviews
+- One review per `(coach_id, learner_id)` — unique index `uq_reviews_pair`.
+- Columns added by migration `AddCoachReviewsFlow`: `booking_id` (FK → bookings, SetNull), `status`
+  (`active|hidden|deleted`, default `'active'`), `deleted_at`, `deleted_by_user_id`, `moderation_reason`.
+- Indexes: `idx_reviews_coach`, `idx_reviews_learner`, `idx_reviews_created_at` (desc),
+  `idx_reviews_booking` (filtered, `booking_id IS NOT NULL`), and `idx_reviews_coach_status_created`
+  on `(coach_id, status, created_at)` for the public active-review listing.
+- Only `active` reviews count toward `coach_profiles.rating` / `total_reviews` (caches recalculated on
+  every create/update/delete/moderation).
+
+### reports
+- Extended to target either a user or a review. `target_user_id` is now **nullable**; new columns:
+  `target_type` (`user|review`, default `'user'`), `target_id`, `description`, `handled_by_user_id`,
+  `handled_at`, `resolution_note`, `action_taken` (`none|review_hidden|review_deleted`).
+- Index `idx_reports_target_entity` on `(target_type, target_id)` for the review-moderation queue.
+
 Other tables follow the same pattern: indexes on FK columns and `status`, descending index on `created_at`, named primary keys (`<table>_pkey`) and named foreign keys (`fk_<table>_<relation>`).
 
 > NOTE: Index/constraint details above are taken from the configuration classes that were reviewed (`BookingConfiguration`, `TrainingPackageConfiguration`, `PaymentConfiguration`). Other entities have analogous configurations in the same folder; consult them for exact index names.

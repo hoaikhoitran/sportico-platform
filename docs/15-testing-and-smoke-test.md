@@ -216,6 +216,32 @@ POST /api/bookings/{bookingId}/training-plan   (coach)  → 200
   `activated: true` and does **not** duplicate notifications/wallet (no PayOS call is made).
 - Ownership: reconciling another learner's `orderCode` → `403 COMMON_FORBIDDEN`.
 
+### 19. Coach review + moderation test
+```
+# Learner has an active/completed PAID booking with the coach (steps 3-4 / 17-18).
+POST /api/coaches/{coachId}/reviews        (learner)  { "rating": 5, "comment": "Great coach" } → 200
+  → CoachProfile.Rating / TotalReviews recalculated
+POST /api/coaches/{coachId}/reviews        (learner, again)            → 409 REVIEW_ALREADY_EXISTS
+GET  /api/coaches/{coachId}/reviews                  (public)         → shows the active review
+GET  /api/coaches/{coachId}/reviews/summary          (public)         → averageRating + 1★–5★ breakdown
+PUT  /api/reviews/{id}                      (learner) { "rating": 4 } → 200 (booking not expired)
+
+# Ineligible cases:
+POST /api/coaches/{coachId}/reviews        (learner w/ pending_payment booking) → 403 REVIEW_NOT_ALLOWED
+POST /api/coaches/{otherCoachId}/reviews   (learner who never bought)           → 403 REVIEW_NOT_ALLOWED
+
+# Expiry: set the booking ExpiresAt in the past, then:
+PUT  /api/reviews/{id}                      (learner)                 → 409 REVIEW_EDIT_EXPIRED
+
+# Moderation:
+POST /api/reviews/{id}/report               (coach, own review)      → 200 (report pending)
+POST /api/reviews/{id}/report               (other coach)            → 403 REVIEW_REPORT_NOT_ALLOWED
+GET  /api/admin/review-reports?status=pending  (admin)               → lists the report + review snapshot
+PUT  /api/admin/review-reports/{reportId}/resolve (admin)
+      { "isValid": true, "hideOrDeleteReview": true }                → review hidden, stats recalculated
+GET  /api/coaches/{coachId}/reviews                  (public)         → hidden review no longer listed
+```
+
 ## Pass Criteria
 
 - Commission fields exactly match the formula (step 5).
@@ -226,3 +252,4 @@ POST /api/bookings/{bookingId}/training-plan   (coach)  → 200
 - Admin withdrawal list returns every status and filters correctly; unknown status → `400`.
 - Reconcile activates a paid-but-unactivated booking, is idempotent with the webhook, and enforces ownership.
 - Coach create-plan stays `409 BOOKING_NOT_ACTIVE` while `pending_payment`, and succeeds once `active` (the rule is never relaxed).
+- Reviews: only learners with a successful paid booking can review; one per coach; edit blocked after expiry; public list/summary count active reviews only; coach can report; admin hide recalculates `CoachProfile.Rating`/`TotalReviews`.

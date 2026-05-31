@@ -141,3 +141,36 @@ The webhook and reconcile both call `ActivatePaidBookingAsync` and are idempoten
 case: activation side effects (notifications, wallet) run only on the first transition to `active`,
 so the two paths can race or repeat without duplicating effects. Reconcile additionally enforces an
 **ownership guard** — a learner may only reconcile their own payment.
+
+## Coach Reviews & Moderation
+
+```
+Eligibility (backend-enforced, never trust frontend):
+  learner may review a coach  ⇔  a Booking exists where
+      LearnerId = learner, CoachId = coach,
+      Status ∈ { active, completed }, PaidAt ≠ null
+  pending_payment | cancelled | refunded  → not allowed
+  one review per (coach, learner)          → uq_reviews_pair + duplicate check
+
+Create (learner)  POST /api/coaches/{coachId}/reviews
+  → review status: active; recalc CoachProfile.Rating + TotalReviews
+Edit (learner)    PUT /api/reviews/{id}
+  → allowed only while a NON-expired successful booking exists (Booking.ExpiresAt)
+  → expired → 409 REVIEW_EDIT_EXPIRED (view stays allowed)
+Delete own (learner) DELETE /api/reviews/{id}
+  → soft delete (status=deleted); recalc stats
+
+Public  GET /api/coaches/{coachId}/reviews            → active only, newest first
+        GET /api/coaches/{coachId}/reviews/summary    → average + 1★–5★ breakdown
+
+Moderation:
+  Coach   POST /api/reviews/{id}/report               → only about own reviews
+  Admin   GET  /api/admin/review-reports?status=...
+          PUT  /api/admin/review-reports/{id}/resolve
+            isValid=false              → report rejected, review stays active
+            isValid=true + hide=true   → review hidden (auditable), recalc stats
+```
+
+The cached `CoachProfile.Rating` / `TotalReviews` are recomputed from **active** reviews after every
+create, update, self-delete, and moderation hide. Coaches can never edit/delete learner reviews —
+they can only report; admins moderate.

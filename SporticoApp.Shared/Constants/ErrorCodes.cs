@@ -200,5 +200,25 @@ namespace SporticoApp.Shared.Constants
             "PAYMENT_ALREADY_EXISTS";
         public const string PaymentNotFound =
             "PAYMENT_NOT_FOUND";
+
+        // Review
+        public const string ReviewNotFound =
+            "REVIEW_NOT_FOUND";
+        public const string ReviewAlreadyExists =
+            "REVIEW_ALREADY_EXISTS";
+        public const string ReviewNotOwned =
+            "REVIEW_NOT_OWNED";
+        public const string ReviewNotAllowed =
+            "REVIEW_NOT_ALLOWED";
+        public const string ReviewEditExpired =
+            "REVIEW_EDIT_EXPIRED";
+        public const string InvalidRating =
+            "INVALID_RATING";
+
+        // Review report / moderation
+        public const string ReviewReportNotFound =
+            "REVIEW_REPORT_NOT_FOUND";
+        public const string ReviewReportNotAllowed =
+            "REVIEW_REPORT_NOT_ALLOWED";
     }
 }

@@ -20,4 +20,16 @@ public static class ClaimsPrincipalExtensions
 
         return userId;
     }
+
+    /// <summary>
+    /// Returns the user id when the request is authenticated, otherwise null.
+    /// Used by endpoints that are public but enrich the response for signed-in users
+    /// (e.g. the per-review CanEdit flag on public review listings).
+    /// </summary>
+    public static Guid? GetUserIdOrNull(this ClaimsPrincipal user)
+    {
+        var userIdValue = user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return Guid.TryParse(userIdValue, out var userId) ? userId : null;
+    }
 }

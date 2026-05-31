@@ -162,6 +162,22 @@ Coach earnings, payout accounts, and withdrawal lifecycle.
 
 See [api/wallet-withdrawals.md](api/wallet-withdrawals.md).
 
+## Reviews — `ReviewsController` / `ReviewReportsController`
+
+| Method | Route | Role |
+|---|---|---|
+| GET | `/api/coaches/{coachId}/reviews` | Public (auth optional) |
+| GET | `/api/coaches/{coachId}/reviews/summary` | Public |
+| GET | `/api/coaches/{coachId}/reviews/me` | Learner |
+| POST | `/api/coaches/{coachId}/reviews` | Learner |
+| PUT | `/api/reviews/{id}` | Learner |
+| DELETE | `/api/reviews/{id}` | Learner |
+| POST | `/api/reviews/{id}/report` | Coach |
+| GET | `/api/admin/review-reports` | Admin |
+| PUT | `/api/admin/review-reports/{id}/resolve` | Admin |
+
+See [api/reviews.md](api/reviews.md).
+
 ## Chat — `ChatController` (`/api/chat`, any auth)
 
 | Method | Route | Purpose |
