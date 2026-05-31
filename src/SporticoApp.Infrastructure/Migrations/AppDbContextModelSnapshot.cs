@@ -1002,7 +1002,7 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Property<string>("Content")
                         .IsRequired()
                         .HasColumnType("text")
-                        .HasColumnName("content");
+                        .HasColumnName("message");
 
                     b.Property<bool>("IsRead")
                         .ValueGeneratedOnAdd()

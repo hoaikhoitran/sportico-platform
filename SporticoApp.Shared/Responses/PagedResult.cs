@@ -17,7 +17,9 @@ namespace SporticoApp.Shared.Responses
         public int TotalCount { get; }
 
         public int TotalPages =>
-            (int)Math.Ceiling(TotalCount / (double)PageSize);
+            PageSize <= 0
+                ? 0
+                : (int)Math.Ceiling(TotalCount / (double)PageSize);
 
         public bool HasPrevious =>
             PageNumber > 1;

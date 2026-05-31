@@ -22,6 +22,11 @@ public sealed class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.Property(e => e.IsRead).HasDefaultValue(false);
         builder.Property(e => e.SentAt).HasDefaultValueSql("now()");
 
+        // The live database stores the message body in a column named "message",
+        // not "content". Map it explicitly so reads and writes target the real
+        // column (otherwise EF emits "m.content" -> 42703 column does not exist -> 500).
+        builder.Property(e => e.Content).HasColumnName("message");
+
         builder.HasOne(d => d.Room)
             .WithMany(p => p.Messages)
             .HasForeignKey(d => d.RoomId)
