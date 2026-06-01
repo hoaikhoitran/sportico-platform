@@ -152,6 +152,16 @@ internal sealed class FakeNotificationRepository : INotificationRepository
 
     public Task SaveChangesAsync() => Task.CompletedTask;
 
+    public Task<Exception?> TryAddAndSaveAsync(IReadOnlyCollection<Notification> notifications)
+    {
+        foreach (var n in notifications)
+        {
+            Count++;
+            Notifications.Add(n);
+        }
+        return Task.FromResult<Exception?>(null);
+    }
+
     public Task<(List<Notification> Items, int TotalCount)> GetPagedByUserIdAsync(Guid userId, NotificationFilterRequest filter) => throw new NotImplementedException();
     public Task<int> GetUnreadCountAsync(Guid userId) => throw new NotImplementedException();
     public Task<Notification?> GetByIdForUpdateAsync(Guid userId, Guid notificationId) => throw new NotImplementedException();

@@ -8,7 +8,18 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
 {
     public void Configure(EntityTypeBuilder<Notification> builder)
     {
-        builder.ToTable("notifications", tb => tb.HasComment("Thông báo cho user"));
+        builder.ToTable("notifications", tb =>
+        {
+            tb.HasComment("Thông báo cho user");
+
+            // Keep this list in sync with NotificationTypeConstants. The constraint is named
+            // chk_notifications_type to match the value already present in the configured
+            // PostgreSQL database (migration UpdateNotificationTypeCheckConstraint drops the
+            // old definition first, then re-adds this one).
+            tb.HasCheckConstraint(
+                "chk_notifications_type",
+                "type IN ('message','review','follow','payment','package','post','system','report','booking','training_package','training_session','training_plan','wallet')");
+        });
 
         builder.HasKey(e => e.Id).HasName("notifications_pkey");
 
@@ -23,7 +34,7 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.Property(e => e.Title).HasMaxLength(255);
         builder.Property(e => e.Type)
             .HasMaxLength(50)
-            .HasComment("message | review | follow | payment | package | system | report");
+            .HasComment("message | review | follow | payment | package | post | system | report | booking | training_package | training_session | training_plan | wallet");
 
         builder.HasOne(d => d.User)
             .WithMany(p => p.Notifications)

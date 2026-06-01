@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using SporticoApp.Application.DTOs.TrainingSessions;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Interfaces.Services;
@@ -19,6 +20,7 @@ namespace SporticoApp.Application.Services
         private readonly ICoachAvailabilityRepository _availabilityRepository;
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
+        private readonly ILogger<TrainingSessionService> _logger;
         private readonly IValidator<CreateTrainingSessionRequest> _createValidator;
         private readonly IValidator<ConfirmTrainingSessionRequest> _confirmValidator;
         private readonly IValidator<CancelTrainingSessionRequest> _cancelValidator;
@@ -30,6 +32,7 @@ namespace SporticoApp.Application.Services
             ICoachAvailabilityRepository availabilityRepository,
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
+            ILogger<TrainingSessionService> logger,
             IValidator<CreateTrainingSessionRequest> createValidator,
             IValidator<ConfirmTrainingSessionRequest> confirmValidator,
             IValidator<CancelTrainingSessionRequest> cancelValidator,
@@ -40,10 +43,37 @@ namespace SporticoApp.Application.Services
             _availabilityRepository = availabilityRepository;
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
+            _logger = logger;
             _createValidator = createValidator;
             _confirmValidator = confirmValidator;
             _cancelValidator = cancelValidator;
             _filterValidator = filterValidator;
+        }
+
+        /// <summary>
+        /// Persists side-effect notifications AFTER the authoritative mutation has already been
+        /// committed. A failure here (e.g. an unexpected DB constraint) is logged with context but
+        /// never turned into an error response — the business mutation already succeeded.
+        /// </summary>
+        private async Task SafeNotifyAsync(
+            string action,
+            Guid? bookingId,
+            Guid? sessionId,
+            params Notification[] notifications)
+        {
+            var error = await _notificationRepository.TryAddAndSaveAsync(notifications);
+            if (error is not null)
+            {
+                _logger.LogError(
+                    error,
+                    "Notification side-effect failed after {Action} (mutation already committed). " +
+                    "bookingId={BookingId} sessionId={SessionId} recipients={Recipients} types={Types}",
+                    action,
+                    bookingId,
+                    sessionId,
+                    string.Join(",", notifications.Select(n => n.UserId)),
+                    string.Join(",", notifications.Select(n => n.Type)));
+            }
         }
 
         public async Task<Result<TrainingSessionResponse>> CreateAsync(
@@ -193,22 +223,24 @@ namespace SporticoApp.Application.Services
             slot.Status = CoachAvailabilitySlotStatuses.Booked;
             slot.UpdatedAt = DateTime.UtcNow;
 
+            // Session insert + slot update share the one scoped DbContext, so this single
+            // SaveChanges persists both atomically (the new session and the slot → booked).
             await _trainingSessionRepository.AddAsync(session);
 
-            // Slot status is tracked; SaveChanges for the session already flushed it.
-            await _availabilityRepository.SaveChangesAsync();
-
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = booking.CoachId,
-                Title = "New training session request",
-                Content = "A learner requested a training session",
-                Type = NotificationTypeConstants.TrainingSession,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _notificationRepository.SaveChangesAsync();
+            // Side effect only — must not fail the already-committed session creation.
+            await SafeNotifyAsync(
+                "CreateTrainingSession",
+                booking.Id,
+                session.Id,
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = booking.CoachId,
+                    Title = "New training session request",
+                    Content = "A learner requested a training session",
+                    Type = NotificationTypeConstants.TrainingSession,
+                    CreatedAt = DateTime.UtcNow
+                });
 
             return Result<TrainingSessionResponse>.Success(session.ToResponse());
         }
@@ -309,17 +341,19 @@ namespace SporticoApp.Application.Services
 
             await _trainingSessionRepository.SaveChangesAsync();
 
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = session.LearnerId,
-                Title = "Training session confirmed",
-                Content = "Your training session has been confirmed",
-                Type = NotificationTypeConstants.TrainingSession,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _notificationRepository.SaveChangesAsync();
+            await SafeNotifyAsync(
+                "ConfirmTrainingSession",
+                session.BookingId,
+                session.Id,
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = session.LearnerId,
+                    Title = "Training session confirmed",
+                    Content = "Your training session has been confirmed",
+                    Type = NotificationTypeConstants.TrainingSession,
+                    CreatedAt = DateTime.UtcNow
+                });
 
             return Result<TrainingSessionResponse>.Success(session.ToResponse());
         }
@@ -381,9 +415,9 @@ namespace SporticoApp.Application.Services
                     session.LearnerNote = request.Reason.Trim();
             }
 
-            await _trainingSessionRepository.SaveChangesAsync();
-
-            // Free the availability slot back to available when a session is cancelled
+            // Release the booked availability slot in the SAME unit of work as the cancellation
+            // so we never end up with "session cancelled but slot still booked" (or vice versa).
+            // Both entities are tracked by the one scoped DbContext, so a single SaveChanges is atomic.
             if (session.AvailabilitySlotId.HasValue)
             {
                 var slot = await _availabilityRepository.GetByIdForUpdateAsync(session.AvailabilitySlotId.Value);
@@ -391,22 +425,26 @@ namespace SporticoApp.Application.Services
                 {
                     slot.Status = CoachAvailabilitySlotStatuses.Available;
                     slot.UpdatedAt = DateTime.UtcNow;
-                    await _availabilityRepository.SaveChangesAsync();
                 }
             }
 
-            var notifyUserId = isCoach ? session.LearnerId : session.CoachId;
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = notifyUserId,
-                Title = "Training session cancelled",
-                Content = "A training session has been cancelled",
-                Type = NotificationTypeConstants.TrainingSession,
-                CreatedAt = DateTime.UtcNow
-            });
+            await _trainingSessionRepository.SaveChangesAsync();
 
-            await _notificationRepository.SaveChangesAsync();
+            // Side effect only — after the cancellation + slot release are committed.
+            var notifyUserId = isCoach ? session.LearnerId : session.CoachId;
+            await SafeNotifyAsync(
+                "CancelTrainingSession",
+                session.BookingId,
+                session.Id,
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = notifyUserId,
+                    Title = "Training session cancelled",
+                    Content = "A training session has been cancelled",
+                    Type = NotificationTypeConstants.TrainingSession,
+                    CreatedAt = DateTime.UtcNow
+                });
 
             return Result<TrainingSessionResponse>.Success(session.ToResponse());
         }
@@ -496,29 +534,33 @@ namespace SporticoApp.Application.Services
                 booking.CompletedAt = DateTime.UtcNow;
             }
 
+            // Session completion + booking increment + wallet credit + ledger entry all persist in
+            // this one SaveChanges (shared DbContext) → the wallet credit is atomic with completion.
             await _bookingRepository.SaveChangesAsync();
 
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = booking.LearnerId,
-                Title = "Training session completed",
-                Content = "Your training session has been completed",
-                Type = NotificationTypeConstants.TrainingSession,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = booking.CoachId,
-                Title = "Wallet credited",
-                Content = "Your wallet has been credited for a completed session",
-                Type = NotificationTypeConstants.Wallet,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _notificationRepository.SaveChangesAsync();
+            // Side effects only — after the wallet credit is committed.
+            await SafeNotifyAsync(
+                "CompleteTrainingSession",
+                booking.Id,
+                session.Id,
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = booking.LearnerId,
+                    Title = "Training session completed",
+                    Content = "Your training session has been completed",
+                    Type = NotificationTypeConstants.TrainingSession,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = booking.CoachId,
+                    Title = "Wallet credited",
+                    Content = "Your wallet has been credited for a completed session",
+                    Type = NotificationTypeConstants.Wallet,
+                    CreatedAt = DateTime.UtcNow
+                });
 
             return Result<TrainingSessionResponse>.Success(session.ToResponse());
         }

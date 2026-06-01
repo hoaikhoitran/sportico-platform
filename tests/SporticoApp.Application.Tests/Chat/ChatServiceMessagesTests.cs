@@ -163,5 +163,6 @@ public class ChatServiceMessagesTests
         public Task<List<Notification>> GetUnreadForUpdateAsync(Guid userId) => throw new NotImplementedException();
         public Task AddWithoutSaveAsync(Notification notification) => Task.CompletedTask;
         public Task SaveChangesAsync() => Task.CompletedTask;
+        public Task<Exception?> TryAddAndSaveAsync(IReadOnlyCollection<Notification> notifications) => Task.FromResult<Exception?>(null);
     }
 }
