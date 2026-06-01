@@ -17,7 +17,9 @@ public partial class Notification
     public string? Content { get; set; }
 
     /// <summary>
-    /// Message | review | follow | Payment | Package | system | report
+    /// One of <see cref="SporticoApp.Shared.Constants.NotificationTypeConstants"/>:
+    /// message | review | follow | payment | package | post | system | report |
+    /// booking | training_package | training_session | training_plan | wallet
     /// </summary>
     public string Type { get; set; } = null!;
 

@@ -25,5 +25,14 @@ namespace SporticoApp.Application.Interfaces.Repositories
         Task AddWithoutSaveAsync(Notification notification);
 
         Task SaveChangesAsync();
+
+        /// <summary>
+        /// Adds the given notifications and saves ONLY them. Intended for side-effect
+        /// notifications raised after the authoritative business mutation has already been
+        /// committed. Never throws: on failure it detaches the un-saved notifications (so the
+        /// shared DbContext stays clean) and returns the caught exception for the caller to log.
+        /// Returns null on success.
+        /// </summary>
+        Task<Exception?> TryAddAndSaveAsync(IReadOnlyCollection<Notification> notifications);
     }
 }

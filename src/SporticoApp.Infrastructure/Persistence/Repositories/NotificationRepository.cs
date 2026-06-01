@@ -65,6 +65,50 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return _context.SaveChangesAsync();
         }
 
+        public async Task<Exception?> TryAddAndSaveAsync(IReadOnlyCollection<Notification> notifications)
+        {
+            if (notifications.Count == 0)
+            {
+                return null;
+            }
+
+            foreach (var notification in notifications)
+            {
+                _context.Notifications.Add(notification);
+            }
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                return null;
+            }
+            catch (DbUpdateException ex)
+            {
+                // Most likely a CHECK/constraint rejection (e.g. an unknown notification type).
+                // The main mutation was already committed in a prior SaveChanges, so this must
+                // not fail the request. Detach the un-saved notifications and report back.
+                DetachNotifications(notifications);
+                return ex;
+            }
+            catch (Exception ex)
+            {
+                DetachNotifications(notifications);
+                return ex;
+            }
+        }
+
+        private void DetachNotifications(IEnumerable<Notification> notifications)
+        {
+            foreach (var notification in notifications)
+            {
+                var entry = _context.Entry(notification);
+                if (entry.State != EntityState.Detached)
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
+        }
+
         private static async Task<(List<Notification> Items, int TotalCount)> GetPagedAsync(
             IQueryable<Notification> query,
             int pageNumber,

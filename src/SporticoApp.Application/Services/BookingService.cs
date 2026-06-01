@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.DTOs.Payments;
 using SporticoApp.Application.Interfaces.Repositories;
@@ -24,6 +25,7 @@ namespace SporticoApp.Application.Services
         private readonly IPayOsService _payOsService;
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
+        private readonly ILogger<BookingService> _logger;
         private readonly IValidator<PurchaseTrainingPackageManualRequest> _manualValidator;
         private readonly IValidator<PurchaseTrainingPackagePayOsRequest> _payOsValidator;
         private readonly IValidator<BookingFilterRequest> _filterValidator;
@@ -35,6 +37,7 @@ namespace SporticoApp.Application.Services
             IPayOsService payOsService,
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
+            ILogger<BookingService> logger,
             IValidator<PurchaseTrainingPackageManualRequest> manualValidator,
             IValidator<PurchaseTrainingPackagePayOsRequest> payOsValidator,
             IValidator<BookingFilterRequest> filterValidator)
@@ -45,6 +48,7 @@ namespace SporticoApp.Application.Services
             _payOsService = payOsService;
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
+            _logger = logger;
             _manualValidator = manualValidator;
             _payOsValidator = payOsValidator;
             _filterValidator = filterValidator;
@@ -628,29 +632,47 @@ namespace SporticoApp.Application.Services
             await SendBookingActivatedNotificationsAsync(booking);
         }
 
+        /// <summary>
+        /// Booking-activation notifications. Raised AFTER the booking has been committed (manual
+        /// purchase, PayOS webhook, or reconcile), so a notification failure is logged with context
+        /// but never turned into an error response.
+        /// </summary>
         private async Task SendBookingActivatedNotificationsAsync(Booking booking)
         {
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
+            var notifications = new[]
             {
-                Id = Guid.NewGuid(),
-                UserId = booking.CoachId,
-                Title = "You have a new booking",
-                Content = "A learner has purchased your training package",
-                Type = NotificationTypeConstants.Booking,
-                CreatedAt = DateTime.UtcNow
-            });
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = booking.CoachId,
+                    Title = "You have a new booking",
+                    Content = "A learner has purchased your training package",
+                    Type = NotificationTypeConstants.Booking,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = booking.LearnerId,
+                    Title = "Your booking is active",
+                    Content = "You can now request training sessions",
+                    Type = NotificationTypeConstants.Booking,
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
 
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
+            var error = await _notificationRepository.TryAddAndSaveAsync(notifications);
+            if (error is not null)
             {
-                Id = Guid.NewGuid(),
-                UserId = booking.LearnerId,
-                Title = "Your booking is active",
-                Content = "You can now request training sessions",
-                Type = NotificationTypeConstants.Booking,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _notificationRepository.SaveChangesAsync();
+                _logger.LogError(
+                    error,
+                    "Notification side-effect failed after booking activation (booking already committed). " +
+                    "bookingId={BookingId} coachId={CoachId} learnerId={LearnerId} types={Types}",
+                    booking.Id,
+                    booking.CoachId,
+                    booking.LearnerId,
+                    NotificationTypeConstants.Booking);
+            }
         }
 
         private static ReconcilePayOsResponse BuildReconcileResponse(

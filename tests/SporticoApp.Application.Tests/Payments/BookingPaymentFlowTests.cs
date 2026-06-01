@@ -87,6 +87,7 @@ public class BookingPaymentFlowTests
             payos,
             wallets,
             notifications,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,
             new PassValidator<PurchaseTrainingPackageManualRequest>(),
             new PassValidator<PurchaseTrainingPackagePayOsRequest>(),
             new PassValidator<BookingFilterRequest>());
@@ -134,6 +135,7 @@ public class BookingPaymentFlowTests
             new FakePayOsService(),
             new FakeCoachWalletRepository(),
             new FakeNotificationRepository(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,
             new PassValidator<PurchaseTrainingPackageManualRequest>(),
             new PassValidator<PurchaseTrainingPackagePayOsRequest>(),
             new PassValidator<BookingFilterRequest>());
