@@ -55,6 +55,7 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<IPublicCoachRepository, PublicCoachRepository>();
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IReviewReportRepository, ReviewReportRepository>();
+            services.AddScoped<IDashboardRepository, DashboardRepository>();
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
@@ -82,6 +83,11 @@ namespace SporticoApp.Infrastructure
                 options.AutoPayoutEnabled = section.GetValue<bool>("AutoPayoutEnabled");
                 options.PayoutCategory = section.GetValue<string>("PayoutCategory") ?? "salary";
             });
+
+            // Backend feature flags (e.g. dev/test manual purchase). Defaults to all-off
+            // when the "Features" section is absent.
+            services.Configure<SporticoApp.Application.Options.FeatureOptions>(
+                configuration.GetSection("Features"));
 
             return services;
         }

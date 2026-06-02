@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SporticoApp.Application.DTOs.Payments;
 using SporticoApp.Application.DTOs.Withdrawals;
@@ -24,6 +25,7 @@ namespace SporticoApp.Application.Services
         private readonly INotificationRepository _notificationRepository;
         private readonly IUserRepository _userRepository;
         private readonly IPayOsPayoutService _payOsPayoutService;
+        private readonly ILogger<WithdrawalService> _logger;
         private readonly IValidator<CreateWithdrawalRequest> _createValidator;
         private readonly IValidator<WithdrawalRequestFilterRequest> _filterValidator;
         private readonly IValidator<RejectWithdrawalRequest> _rejectValidator;
@@ -53,6 +55,7 @@ namespace SporticoApp.Application.Services
             INotificationRepository notificationRepository,
             IUserRepository userRepository,
             IPayOsPayoutService payOsPayoutService,
+            ILogger<WithdrawalService> logger,
             IOptions<PayoutOptions> payoutOptions,
             IValidator<CreateWithdrawalRequest> createValidator,
             IValidator<WithdrawalRequestFilterRequest> filterValidator,
@@ -65,6 +68,7 @@ namespace SporticoApp.Application.Services
             _notificationRepository = notificationRepository;
             _userRepository = userRepository;
             _payOsPayoutService = payOsPayoutService;
+            _logger = logger;
             _autoPayoutEnabled = payoutOptions.Value.AutoPayoutEnabled;
             _payoutCategory = payoutOptions.Value.PayoutCategory;
             _createValidator = createValidator;
@@ -316,7 +320,7 @@ namespace SporticoApp.Application.Services
 
             await _withdrawalRepository.SaveChangesAsync();
 
-            await NotifyCoachAsync(withdrawal.CoachId,
+            await NotifyCoachAsync(withdrawal,
                 "Withdrawal approved",
                 "Your withdrawal request has been approved");
 
@@ -382,7 +386,7 @@ namespace SporticoApp.Application.Services
 
             await _withdrawalRepository.SaveChangesAsync();
 
-            await NotifyCoachAsync(withdrawal.CoachId,
+            await NotifyCoachAsync(withdrawal,
                 "Withdrawal rejected",
                 request.AdminNote?.Trim() ?? "Your withdrawal request was rejected");
 
@@ -429,7 +433,7 @@ namespace SporticoApp.Application.Services
 
             await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: adminId);
 
-            await NotifyCoachAsync(withdrawal.CoachId, "Withdrawal paid", "Your withdrawal has been paid");
+            await NotifyCoachAsync(withdrawal, "Withdrawal paid", "Your withdrawal has been paid");
 
             return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
         }
@@ -483,7 +487,7 @@ namespace SporticoApp.Application.Services
                     throw new NotFoundException(ErrorCodes.CoachWalletNotFound, "Coach wallet not found");
 
                 await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);
-                await NotifyCoachAsync(withdrawal.CoachId, "Withdrawal paid", "Your withdrawal has been paid");
+                await NotifyCoachAsync(withdrawal, "Withdrawal paid", "Your withdrawal has been paid");
             }
             else if (state is "FAILED" or "CANCELLED" or "REJECTED")
             {
@@ -682,7 +686,7 @@ namespace SporticoApp.Application.Services
             if (state == "SUCCESS")
             {
                 await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);
-                await NotifyCoachAsync(withdrawal.CoachId, "Withdrawal paid", "Your withdrawal has been paid");
+                await NotifyCoachAsync(withdrawal, "Withdrawal paid", "Your withdrawal has been paid");
             }
             else
             {
@@ -690,7 +694,7 @@ namespace SporticoApp.Application.Services
                 withdrawal.Status = WithdrawalRequestStatuses.Processing;
                 withdrawal.UpdatedAt = DateTime.UtcNow;
                 await _withdrawalRepository.SaveChangesAsync();
-                await NotifyCoachAsync(withdrawal.CoachId,
+                await NotifyCoachAsync(withdrawal,
                     "Withdrawal processing",
                     "Your withdrawal payout is being processed");
             }
@@ -773,7 +777,7 @@ namespace SporticoApp.Application.Services
 
             await _withdrawalRepository.SaveChangesAsync();
 
-            await NotifyCoachAsync(withdrawal.CoachId,
+            await NotifyCoachAsync(withdrawal,
                 "Withdrawal failed",
                 $"Your withdrawal could not be processed: {reason}");
         }
@@ -795,19 +799,36 @@ namespace SporticoApp.Application.Services
             }
         }
 
-        private async Task NotifyCoachAsync(Guid coachId, string title, string content)
+        /// <summary>
+        /// Wallet notification raised AFTER the withdrawal/wallet mutation has been committed.
+        /// A notification failure is logged with full context but never breaks the already
+        /// persisted withdrawal — the main mutation stays authoritative.
+        /// </summary>
+        private async Task NotifyCoachAsync(WithdrawalRequest withdrawal, string title, string content)
         {
-            await _notificationRepository.AddWithoutSaveAsync(new Notification
+            var notification = new Notification
             {
                 Id = Guid.NewGuid(),
-                UserId = coachId,
+                UserId = withdrawal.CoachId,
                 Title = title,
                 Content = content,
                 Type = NotificationTypeConstants.Wallet,
                 CreatedAt = DateTime.UtcNow
-            });
+            };
 
-            await _notificationRepository.SaveChangesAsync();
+            var error = await _notificationRepository.TryAddAndSaveAsync(new[] { notification });
+            if (error is not null)
+            {
+                _logger.LogError(
+                    error,
+                    "Withdrawal notification side-effect failed (withdrawal already committed). " +
+                    "action={Action} withdrawalId={WithdrawalId} coachId={CoachId} status={Status} type={Type}",
+                    title,
+                    withdrawal.Id,
+                    withdrawal.CoachId,
+                    withdrawal.Status,
+                    NotificationTypeConstants.Wallet);
+            }
         }
 
         private async Task<WithdrawalReceiptResponse> BuildReceiptAsync(WithdrawalRequest withdrawal)

@@ -117,6 +117,75 @@ public class TrainingPlanCreateTests
         Assert.Empty(plans.Added);
     }
 
+    private static TrainingPlan PlanFor(Guid coachId, Guid bookingId) => new()
+    {
+        Id = Guid.NewGuid(),
+        BookingId = bookingId,
+        CoachId = coachId,
+        LearnerId = LearnerId,
+        Title = "Plan",
+        GoalType = "strength",
+        Status = TrainingPlanStatuses.Draft,
+        StartDate = DateTime.UtcNow.Date,
+        EndDate = DateTime.UtcNow.Date.AddDays(30),
+        TotalWeeks = 4,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    // J: another coach cannot update a plan they do not own.
+    [Fact]
+    public async Task Update_NotOwner_ThrowsForbidden()
+    {
+        var booking = BookingWith(BookingStatuses.Active);
+        var plan = PlanFor(CoachId, booking.Id);
+        var plans = new FakeTrainingPlanRepository { PlanForUpdate = plan };
+        var service = BuildService(new FakePlanBookingRepository(booking, booking), plans);
+
+        var ex = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            service.UpdateAsync(Guid.NewGuid(), plan.Id, new UpdateTrainingPlanRequest()));
+
+        Assert.Equal(ErrorCodes.TrainingPlanNotOwned, ex.Code);
+    }
+
+    // J: updating a non-existent plan returns 404, not 500.
+    [Fact]
+    public async Task Update_InvalidPlanId_ThrowsNotFound()
+    {
+        var plans = new FakeTrainingPlanRepository(); // PlanForUpdate null
+        var service = BuildService(new FakePlanBookingRepository(null, null), plans);
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            service.UpdateAsync(CoachId, Guid.NewGuid(), new UpdateTrainingPlanRequest()));
+    }
+
+    // J: learner assigned to the booking can read the plan.
+    [Fact]
+    public async Task GetByBooking_Learner_Succeeds()
+    {
+        var booking = BookingWith(BookingStatuses.Active);
+        var plan = PlanFor(CoachId, booking.Id);
+        var plans = new FakeTrainingPlanRepository { Existing = plan };
+        var service = BuildService(new FakePlanBookingRepository(booking, booking), plans);
+
+        var result = await service.GetByBookingAsync(LearnerId, booking.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(plan.Id, result.Data!.Id);
+    }
+
+    // J: an unrelated user (neither the booking learner nor coach) cannot read the plan.
+    [Fact]
+    public async Task GetByBooking_UnrelatedUser_ThrowsForbidden()
+    {
+        var booking = BookingWith(BookingStatuses.Active);
+        var plans = new FakeTrainingPlanRepository { Existing = PlanFor(CoachId, booking.Id) };
+        var service = BuildService(new FakePlanBookingRepository(booking, booking), plans);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            service.GetByBookingAsync(Guid.NewGuid(), booking.Id));
+    }
+
     // ── fakes ────────────────────────────────────────────────────────────────
     private sealed class FakePlanBookingRepository : IBookingRepository
     {
@@ -152,6 +221,7 @@ public class TrainingPlanCreateTests
     private sealed class FakeTrainingPlanRepository : ITrainingPlanRepository
     {
         public TrainingPlan? Existing;
+        public TrainingPlan? PlanForUpdate;
         public readonly List<TrainingPlan> Added = new();
 
         public Task<TrainingPlan?> GetByBookingIdAsync(Guid bookingId) => Task.FromResult(Existing);
@@ -163,7 +233,8 @@ public class TrainingPlanCreateTests
 
         public Task<TrainingPlan?> GetByBookingIdForUpdateAsync(Guid bookingId) => throw new NotImplementedException();
         public Task<TrainingPlan?> GetByIdAsync(Guid id) => throw new NotImplementedException();
-        public Task<TrainingPlan?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
+        public Task<TrainingPlan?> GetByIdForUpdateAsync(Guid id)
+            => Task.FromResult(PlanForUpdate != null && PlanForUpdate.Id == id ? PlanForUpdate : null);
         public Task<TrainingPlanWeek?> GetWeekByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
         public Task<TrainingPlanDay?> GetDayByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
         public Task<TrainingPlanExercise?> GetExerciseByIdForUpdateAsync(Guid id) => throw new NotImplementedException();

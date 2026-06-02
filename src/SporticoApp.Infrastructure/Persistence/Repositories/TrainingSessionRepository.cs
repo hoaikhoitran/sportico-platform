@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SporticoApp.Application.DTOs.TrainingSessions;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
+using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Exceptions;
 
 namespace SporticoApp.Infrastructure.Persistence.Repositories
 {
@@ -114,8 +117,25 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         public async Task AddAsync(TrainingSession session)
         {
             _context.TrainingSessions.Add(session);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (IsActiveSlotUniqueViolation(ex))
+            {
+                // A concurrent request already attached an active session to this slot.
+                // The filtered unique index uq_training_sessions_active_slot rejected the insert;
+                // surface it as a clean 409 ScheduleConflict instead of a 500.
+                throw new ConflictException(
+                    ErrorCodes.ScheduleConflict,
+                    "Availability slot is no longer available");
+            }
         }
+
+        private static bool IsActiveSlotUniqueViolation(DbUpdateException ex)
+            => ex.InnerException is PostgresException pg
+               && pg.SqlState == PostgresErrorCodes.UniqueViolation
+               && pg.ConstraintName == "uq_training_sessions_active_slot";
 
         public Task AddWithoutSaveAsync(TrainingSession session)
         {

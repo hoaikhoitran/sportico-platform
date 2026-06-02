@@ -88,6 +88,7 @@ public class BookingPaymentFlowTests
             wallets,
             notifications,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,
+            Microsoft.Extensions.Options.Options.Create(new SporticoApp.Application.Options.FeatureOptions { EnableManualPurchase = true }),
             new PassValidator<PurchaseTrainingPackageManualRequest>(),
             new PassValidator<PurchaseTrainingPackagePayOsRequest>(),
             new PassValidator<BookingFilterRequest>());
@@ -136,6 +137,7 @@ public class BookingPaymentFlowTests
             new FakeCoachWalletRepository(),
             new FakeNotificationRepository(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,
+            Microsoft.Extensions.Options.Options.Create(new SporticoApp.Application.Options.FeatureOptions { EnableManualPurchase = true }),
             new PassValidator<PurchaseTrainingPackageManualRequest>(),
             new PassValidator<PurchaseTrainingPackagePayOsRequest>(),
             new PassValidator<BookingFilterRequest>());

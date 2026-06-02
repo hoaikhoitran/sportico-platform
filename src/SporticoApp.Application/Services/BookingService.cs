@@ -1,11 +1,13 @@
 using System.Text.Json;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.DTOs.Payments;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Application.Mappings;
+using SporticoApp.Application.Options;
 using SporticoApp.Core.Entities;
 using SporticoApp.Shared.Constants;
 using SporticoApp.Shared.Exceptions;
@@ -26,6 +28,7 @@ namespace SporticoApp.Application.Services
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
         private readonly ILogger<BookingService> _logger;
+        private readonly bool _enableManualPurchase;
         private readonly IValidator<PurchaseTrainingPackageManualRequest> _manualValidator;
         private readonly IValidator<PurchaseTrainingPackagePayOsRequest> _payOsValidator;
         private readonly IValidator<BookingFilterRequest> _filterValidator;
@@ -38,6 +41,7 @@ namespace SporticoApp.Application.Services
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
             ILogger<BookingService> logger,
+            IOptions<FeatureOptions> featureOptions,
             IValidator<PurchaseTrainingPackageManualRequest> manualValidator,
             IValidator<PurchaseTrainingPackagePayOsRequest> payOsValidator,
             IValidator<BookingFilterRequest> filterValidator)
@@ -49,6 +53,7 @@ namespace SporticoApp.Application.Services
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
             _logger = logger;
+            _enableManualPurchase = featureOptions.Value.EnableManualPurchase;
             _manualValidator = manualValidator;
             _payOsValidator = payOsValidator;
             _filterValidator = filterValidator;
@@ -58,6 +63,16 @@ namespace SporticoApp.Application.Services
             Guid learnerId,
             PurchaseTrainingPackageManualRequest request)
         {
+            // Manual purchase is a dev/test-only path that mints an already-paid active booking.
+            // In production it is disabled (Features:EnableManualPurchase=false) so normal learners
+            // must go through PayOS. Return a clean business error, never a 500.
+            if (!_enableManualPurchase)
+            {
+                throw new ForbiddenException(
+                    ErrorCodes.ManualPurchaseDisabled,
+                    "Manual purchase is disabled. Please use the PayOS purchase flow.");
+            }
+
             var validationResult = await _manualValidator.ValidateAsync(request);
             if (!validationResult.IsValid)
             {

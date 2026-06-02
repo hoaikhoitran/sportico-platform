@@ -201,6 +201,10 @@ namespace SporticoApp.Shared.Constants
         public const string PaymentNotFound =
             "PAYMENT_NOT_FOUND";
 
+        // Feature flags
+        public const string ManualPurchaseDisabled =
+            "MANUAL_PURCHASE_DISABLED";
+
         // Review
         public const string ReviewNotFound =
             "REVIEW_NOT_FOUND";

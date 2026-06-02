@@ -151,6 +151,50 @@ public class TrainingSessionServiceTests
         Assert.Single(wallet.Transactions);
     }
 
+    // Part E: completing a non-scheduled session is a 409 (requested / cancelled / completed).
+    [Theory]
+    [InlineData(TrainingSessionStatuses.Requested)]
+    [InlineData(TrainingSessionStatuses.Cancelled)]
+    [InlineData(TrainingSessionStatuses.Completed)]
+    public async Task Complete_NonScheduledSession_ThrowsConflict(string status)
+    {
+        var session = Session(status);
+        var ts = new FakeTsRepo { Session = session };
+        var service = Build(ts, new FakeNotifRepo(), bookings: new FakeBookingRepo { Booking = null });
+
+        var ex = await Assert.ThrowsAsync<ConflictException>(() => service.CompleteAsync(CoachId, session.Id));
+        Assert.Equal(ErrorCodes.InvalidTrainingSessionStatus, ex.Code);
+    }
+
+    // Part E: booking becomes 'completed' only once CompletedSessions >= TotalSessions.
+    [Fact]
+    public async Task Complete_LastSession_MarksBookingCompleted()
+    {
+        var session = Session(TrainingSessionStatuses.Scheduled);
+        var booking = new Booking
+        {
+            Id = session.BookingId,
+            CoachId = CoachId,
+            LearnerId = LearnerId,
+            TotalSessions = 1,
+            CompletedSessions = 0,
+            PerSessionCoachAmount = 100m,
+            Status = BookingStatuses.Active,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        var ts = new FakeTsRepo { Session = session };
+        var bookings = new FakeBookingRepo { Booking = booking };
+        var wallet = new FakeWalletRepo { Wallet = new CoachWallet { Id = Guid.NewGuid(), CoachId = CoachId } };
+        var service = Build(ts, new FakeNotifRepo(), bookings: bookings, wallet: wallet);
+
+        var result = await service.CompleteAsync(CoachId, session.Id);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(BookingStatuses.Completed, booking.Status);
+        Assert.NotNull(booking.CompletedAt);
+    }
+
     // ── fakes ────────────────────────────────────────────────────────────────
     private sealed class FakeTsRepo : ITrainingSessionRepository
     {

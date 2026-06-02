@@ -78,6 +78,7 @@ public class WithdrawalServiceTests
             new FakeNotificationRepository(),
             new FakeUserRepo(),
             payos,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<WithdrawalService>.Instance,
             Microsoft.Extensions.Options.Options.Create(
                 new PayoutOptions { AutoPayoutEnabled = false, PayoutCategory = "salary" }),
             new PassValidator<CreateWithdrawalRequest>(),
