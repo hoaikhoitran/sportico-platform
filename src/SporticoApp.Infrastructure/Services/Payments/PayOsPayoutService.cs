@@ -26,12 +26,12 @@ namespace SporticoApp.Infrastructure.Services.Payments
     public class PayOsPayoutService : IPayOsPayoutService
     {
         private readonly HttpClient _httpClient;
-        private readonly PayOsSettings _settings;
+        private readonly PayOsPayoutSettings _settings;
         private readonly ILogger<PayOsPayoutService> _logger;
 
         public PayOsPayoutService(
             HttpClient httpClient,
-            IOptions<PayOsSettings> settings,
+            IOptions<PayOsPayoutSettings> settings,
             ILogger<PayOsPayoutService> logger)
         {
             _httpClient = httpClient;
@@ -41,6 +41,8 @@ namespace SporticoApp.Infrastructure.Services.Payments
 
         public async Task<PayOsPayoutBalanceResponse> GetBalanceAsync()
         {
+            ValidatePayoutSettings();
+
             using var httpRequest = new HttpRequestMessage(
                 HttpMethod.Get,
                 "/v1/payouts-account/balance");
@@ -98,6 +100,9 @@ namespace SporticoApp.Infrastructure.Services.Payments
             PayOsCreatePayoutRequest request,
             string idempotencyKey)
         {
+            ValidatePayoutSettings();
+            ValidatePayoutRequest(request);
+
             // Canonical string for signature — sorted alphabetically, core fields only.
             // PayOS payout signature covers: amount, description, referenceId,
             // toAccountNumber, toBin (excluding category).
@@ -266,6 +271,75 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 result.Category = cat.GetString();
 
             return result;
+        }
+
+        /// <summary>
+        /// Fails loudly (rather than calling PayOS with empty credentials) when the dedicated
+        /// payout-channel credentials are not configured. Lists exactly which keys are missing.
+        /// </summary>
+        private void ValidatePayoutSettings()
+        {
+            var missingKeys = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(_settings.ClientId))
+            {
+                missingKeys.Add("PayOsPayout:ClientId");
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.ApiKey))
+            {
+                missingKeys.Add("PayOsPayout:ApiKey");
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.ChecksumKey))
+            {
+                missingKeys.Add("PayOsPayout:ChecksumKey");
+            }
+
+            if (missingKeys.Count == 0)
+            {
+                return;
+            }
+
+            throw new FailureException(
+                ErrorCodes.PayOsPayoutFailed,
+                "PayOS payout (Chi) configuration is missing required values. " +
+                "Configure the dedicated payout channel credentials via PayOsPayout__* " +
+                "(Azure App Settings / environment variables) — do not reuse the inbound PayOs__* keys.",
+                missingKeys);
+        }
+
+        private static void ValidatePayoutRequest(PayOsCreatePayoutRequest request)
+        {
+            var details = new List<string>();
+
+            if (request.Amount <= 0)
+            {
+                details.Add("Amount must be greater than zero");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ReferenceId))
+            {
+                details.Add("ReferenceId is required");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ToBin))
+            {
+                details.Add("ToBin is required");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ToAccountNumber))
+            {
+                details.Add("ToAccountNumber is required");
+            }
+
+            if (details.Count > 0)
+            {
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Invalid PayOS payout request",
+                    details);
+            }
         }
 
         private static string GenerateHmacSha256(string data, string key)

@@ -81,6 +81,38 @@ namespace SporticoApp.Application.Mappings
             };
         }
 
+        public static PublicUserResponse ToPublicUserResponse(this User user)
+        {
+            return new PublicUserResponse
+            {
+                Id = user.Id,
+                FullName = user.FullName,
+                AvatarUrl = user.AvatarUrl,
+                Roles = user.UserRoles
+                    .Where(ur => ur.Role != null)
+                    .Select(ur => ur.Role.Name)
+                    .OrderBy(name => name)
+                    .ToList(),
+                CoachProfile = user.CoachProfile == null
+                    ? null
+                    : new CoachProfileSummaryResponse
+                    {
+                        Headline = user.CoachProfile.Headline,
+                        Bio = user.CoachProfile.Bio,
+                        ExperienceYears = user.CoachProfile.ExperienceYears,
+                        CoverImageUrl = user.CoachProfile.CoverImageUrl,
+                        Rating = user.CoachProfile.Rating,
+                        TotalReviews = user.CoachProfile.TotalReviews
+                    },
+                LearnerProfile = user.LearnerProfile == null
+                    ? null
+                    : new LearnerProfileSummaryResponse
+                    {
+                        Goal = user.LearnerProfile.Goal
+                    }
+            };
+        }
+
         public static void ApplyUpdate(this User user, UpdateMeRequest request)
         {
             user.FullName = request.FullName.Trim();

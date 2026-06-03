@@ -13,10 +13,23 @@ namespace SporticoApp.Api.Controllers
     public class UsersController : ControllerBase
     {
         private readonly IUserProfileService _userProfileService;
+        private readonly IUserPublicService _userPublicService;
 
-        public UsersController(IUserProfileService userProfileService)
+        public UsersController(
+            IUserProfileService userProfileService,
+            IUserPublicService userPublicService)
         {
             _userProfileService = userProfileService;
+            _userPublicService = userPublicService;
+        }
+
+        [HttpGet("{id:guid}")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(Result<PublicUserResponse>), 200)]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            var result = await _userPublicService.GetByIdAsync(id);
+            return Ok(result);
         }
 
         [HttpGet("me")]

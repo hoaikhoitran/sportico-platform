@@ -29,6 +29,11 @@ namespace SporticoApp.Infrastructure
             services.Configure<PayOsSettings>(options =>
                 configuration.GetSection("PayOs").Bind(options));
 
+            // Dedicated PayOS Payout (Chi) channel credentials — kept separate from the inbound
+            // PayOs payment-link credentials. Real values come from PayOsPayout__* env vars.
+            services.Configure<PayOsPayoutSettings>(options =>
+                configuration.GetSection("PayOsPayout").Bind(options));
+
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IRoleRepository, RoleRepository>();
             services.AddScoped<IUserRoleRepository, UserRoleRepository>();
@@ -69,19 +74,41 @@ namespace SporticoApp.Infrastructure
                 client.BaseAddress = new Uri(settings.BaseUrl);
             });
 
+            // Payout (Chi) HTTP client uses the dedicated payout BaseUrl, falling back to the
+            // inbound PayOs BaseUrl, then the PayOS default, for backward compatibility.
             services.AddHttpClient<IPayOsPayoutService, PayOsPayoutService>((sp, client) =>
             {
-                var settings = sp.GetRequiredService<IOptions<PayOsSettings>>().Value;
-                client.BaseAddress = new Uri(settings.BaseUrl);
+                var payoutBaseUrl = configuration["PayOsPayout:BaseUrl"];
+                if (string.IsNullOrWhiteSpace(payoutBaseUrl))
+                {
+                    payoutBaseUrl = configuration["PayOs:BaseUrl"];
+                }
+                if (string.IsNullOrWhiteSpace(payoutBaseUrl))
+                {
+                    payoutBaseUrl = "https://api-merchant.payos.vn";
+                }
+
+                client.BaseAddress = new Uri(payoutBaseUrl);
             });
 
-            // Bind PayoutOptions from the PayOs config section so Application layer
-            // can read AutoPayoutEnabled and PayoutCategory without depending on Infrastructure.
+            // Bind PayoutOptions so the Application layer can read AutoPayoutEnabled and
+            // PayoutCategory without depending on Infrastructure. Prefer the dedicated PayOsPayout
+            // section, falling back to the legacy PayOs section for backward compatibility.
             services.Configure<SporticoApp.Application.Options.PayoutOptions>(options =>
             {
-                var section = configuration.GetSection("PayOs");
-                options.AutoPayoutEnabled = section.GetValue<bool>("AutoPayoutEnabled");
-                options.PayoutCategory = section.GetValue<string>("PayoutCategory") ?? "salary";
+                var payout = configuration.GetSection("PayOsPayout");
+                var payin = configuration.GetSection("PayOs");
+
+                options.AutoPayoutEnabled =
+                    payout.GetValue<bool?>("AutoPayoutEnabled")
+                    ?? payin.GetValue<bool>("AutoPayoutEnabled");
+
+                var category = payout.GetValue<string?>("PayoutCategory");
+                if (string.IsNullOrWhiteSpace(category))
+                {
+                    category = payin.GetValue<string?>("PayoutCategory");
+                }
+                options.PayoutCategory = string.IsNullOrWhiteSpace(category) ? "salary" : category;
             });
 
             // Backend feature flags (e.g. dev/test manual purchase). Defaults to all-off

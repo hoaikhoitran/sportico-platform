@@ -209,6 +209,42 @@ public class WithdrawalServiceTests
         Assert.Empty(h.Wallets.Transactions);
     }
 
+    // Auto mode: the PayOS payout request carries the exact contract fields the spec mandates —
+    // integer VND amount, withdrawal id as referenceId, fixed description, destination bank, and
+    // configured category.
+    [Fact]
+    public async Task Approve_AutoMode_SendsExactPayoutContractFields()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Pending, amount: 150_000m);
+        var h = Build(available: 50_000m, pending: 150_000m, withdrawal: w, autoPayout: true);
+        h.PayOs.CreateState = "PROCESSING";
+
+        await h.Service.ApproveAsync(Guid.NewGuid(), w.Id);
+
+        var req = h.PayOs.LastRequest;
+        Assert.NotNull(req);
+        Assert.Equal(150_000, req!.Amount);                  // decimal VND → int VND
+        Assert.Equal(w.Id.ToString(), req.ReferenceId);
+        Assert.Equal("SPORTICO WD", req.Description);
+        Assert.Equal("970418", req.ToBin);
+        Assert.Equal("0123456789", req.ToAccountNumber);
+        Assert.Equal("salary", req.Category);
+    }
+
+    // Auto mode: fractional VND is rounded to a whole integer (VND has no minor units) rather than
+    // truncated by a raw cast.
+    [Fact]
+    public async Task Approve_AutoMode_RoundsFractionalVndAmount()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Pending, amount: 100_000.5m);
+        var h = Build(available: 0m, pending: 100_000.5m, withdrawal: w, autoPayout: true);
+        h.PayOs.CreateState = "PROCESSING";
+
+        await h.Service.ApproveAsync(Guid.NewGuid(), w.Id);
+
+        Assert.Equal(100_001, h.PayOs.LastRequest!.Amount);
+    }
+
     // 1. Creating a withdrawal requires a verified payout account.
     [Fact]
     public async Task Create_WithoutVerifiedAccount_ThrowsConflict()
@@ -527,6 +563,7 @@ public class WithdrawalServiceTests
         public string CreateCode = "00";          // "00" = envelope accepted; anything else = PayOS reject
         public string DetailState = "PROCESSING";
         public string? LastIdempotencyKey;
+        public PayOsCreatePayoutRequest? LastRequest;
         public int CreateCallCount;
 
         public Task<PayOsPayoutBalanceResponse> GetBalanceAsync() => throw new NotImplementedException();
@@ -535,6 +572,7 @@ public class WithdrawalServiceTests
         {
             CreateCallCount++;
             LastIdempotencyKey = idempotencyKey;
+            LastRequest = request;
             return Task.FromResult(new PayOsCreatePayoutResponse
             {
                 Code = CreateCode,

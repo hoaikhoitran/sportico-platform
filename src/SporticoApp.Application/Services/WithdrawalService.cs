@@ -683,8 +683,8 @@ namespace SporticoApp.Application.Services
                     new PayOsCreatePayoutRequest
                     {
                         ReferenceId = key,
-                        Amount = (int)withdrawal.Amount,
-                        Description = $"SPORTICO WD",
+                        Amount = ToPayoutAmountVnd(withdrawal.Amount),
+                        Description = "SPORTICO WD",
                         ToBin = payoutAccount.BankBin,
                         ToAccountNumber = payoutAccount.BankAccountNumber,
                         Category = _payoutCategory
@@ -850,6 +850,30 @@ namespace SporticoApp.Application.Services
                     => PayoutOutcome.Failed,
                 _ => PayoutOutcome.Processing, // PROCESSING, PENDING, unknown → stay reserved
             };
+        }
+
+        /// <summary>
+        /// Converts a wallet amount (decimal VND) into the integer VND value the PayOS payout API
+        /// expects. VND has no minor units, so the amount must be a whole, positive number that fits
+        /// in Int32. Rather than silently truncating fractional VND with a raw <c>(int)</c> cast — or
+        /// leaking a raw <see cref="OverflowException"/> for an out-of-range amount — anything outside
+        /// that range is rejected with a clear domain error.
+        /// </summary>
+        private static int ToPayoutAmountVnd(decimal amount)
+        {
+            var whole = Math.Round(amount, MidpointRounding.AwayFromZero);
+            if (whole <= 0m || whole > int.MaxValue)
+            {
+                throw new ValidationException(
+                    ErrorCodes.ValidationError,
+                    "Withdrawal amount is outside the supported PayOS payout range",
+                    new List<string>
+                    {
+                        $"Amount must be a positive whole VND value not exceeding {int.MaxValue:N0}"
+                    });
+            }
+
+            return (int)whole;
         }
 
         /// <summary>

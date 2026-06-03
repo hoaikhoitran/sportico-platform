@@ -109,6 +109,8 @@ namespace SporticoApp.Shared.Constants
         //PayOS
         public const string PayOsCreatePaymentFailed =
             "PAYOS_CREATE_PAYMENT_FAILED";
+        public const string PayOsPayoutFailed =
+            "PAYOS_PAYOUT_FAILED";
         //Package
         public const string PackageNotFound =
             "PACKAGE_NOT_FOUND";

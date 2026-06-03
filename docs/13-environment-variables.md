@@ -26,10 +26,31 @@ Use the **double-underscore** form (`Section__Key`) for environment variables / 
 | `PayOs__ReturnUrl` | `PayOs:ReturnUrl` | `https://your-frontend/payment/success` | Frontend success page. |
 | `PayOs__CancelUrl` | `PayOs:CancelUrl` | `https://your-frontend/payment/cancel` | Frontend cancel page. |
 | `PayOs__PaymentLinkExpireMinutes` | `PayOs:PaymentLinkExpireMinutes` | `15` | Must be > 0. |
-| `PayOs__AutoPayoutEnabled` | `PayOs:AutoPayoutEnabled` | `false` | **Withdrawal payout mode.** `false` (default) = manual: admin approves then marks paid after an external transfer. `true` = admin **approval** triggers an automatic PayOS Chi payout. Coach withdrawal requests never send money in either mode. Set `PayOs__AutoPayoutEnabled=true` in production to enable automatic payouts. |
-| `PayOs__PayoutCategory` | `PayOs:PayoutCategory` | `salary` | PayOS payout category sent with Chi payouts (auto mode only). |
+| `PayOs__AutoPayoutEnabled` | `PayOs:AutoPayoutEnabled` | `false` | **Legacy fallback** for the withdrawal payout mode — only used when `PayOsPayout__AutoPayoutEnabled` is unset. Prefer the dedicated `PayOsPayout__*` keys below. |
+| `PayOs__PayoutCategory` | `PayOs:PayoutCategory` | `salary` | **Legacy fallback** for the payout category — only used when `PayOsPayout__PayoutCategory` is unset. |
 
-If any of the inbound-payment keys are blank, creating a PayOS payment throws `PAYOS_CREATE_PAYMENT_FAILED` listing the missing keys. Auto-payout additionally requires `AutoPayoutEnabled=true` and a verified coach payout account (`BankBin`, `BankAccountNumber`).
+If any of the inbound-payment keys are blank, creating a PayOS payment throws `PAYOS_CREATE_PAYMENT_FAILED` listing the missing keys.
+
+## PayOS Payout / Chi channel (required for auto payouts)
+
+Outbound coach withdrawals use a **dedicated PayOS Payout ("Kênh chuyển tiền" / Chi) channel** whose
+credentials are kept separate from the inbound payment-link channel above — PayOS may issue a different
+`ClientId` / `ApiKey` / `ChecksumKey` per channel. Bound from the `PayOsPayout` section; the
+`AutoPayoutEnabled` / `PayoutCategory` values fall back to the legacy `PayOs__*` keys when unset.
+
+| Env var | Config key | Placeholder | Notes |
+|---|---|---|---|
+| `PayOsPayout__ClientId` | `PayOsPayout:ClientId` | `<payout-client-id>` | Sent as `x-client-id` on payout calls. |
+| `PayOsPayout__ApiKey` | `PayOsPayout:ApiKey` | `<payout-api-key>` | Sent as `x-api-key` on payout calls. |
+| `PayOsPayout__ChecksumKey` | `PayOsPayout:ChecksumKey` | `<payout-checksum-key>` | HMAC key for payout request signatures. |
+| `PayOsPayout__BaseUrl` | `PayOsPayout:BaseUrl` | `https://api-merchant.payos.vn` | Payout API base (falls back to `PayOs__BaseUrl`, then the PayOS default). |
+| `PayOsPayout__AutoPayoutEnabled` | `PayOsPayout:AutoPayoutEnabled` | `false` | **Withdrawal payout mode.** `false` (default) = manual: admin approves, transfers externally, then marks paid. `true` = admin **approval** triggers an automatic PayOS Chi payout. Coach withdrawal requests never send money in either mode. Set `PayOsPayout__AutoPayoutEnabled=true` in production to enable automatic payouts. |
+| `PayOsPayout__PayoutCategory` | `PayOsPayout:PayoutCategory` | `salary` | PayOS payout category sent with Chi payouts (auto mode only). |
+
+When auto mode is on and a payout is attempted with any of `ClientId` / `ApiKey` / `ChecksumKey` blank,
+the payout fails loudly with `PAYOS_PAYOUT_FAILED` listing the missing keys (it never calls PayOS with
+empty credentials). Auto payout additionally requires a verified coach payout account (`BankBin`,
+`BankAccountNumber`).
 
 ## Email (registration verification)
 
@@ -71,6 +92,13 @@ PayOs__ChecksumKey=...
 PayOs__BaseUrl=https://api-merchant.payos.vn
 PayOs__ReturnUrl=http://localhost:3000/payment/success
 PayOs__CancelUrl=http://localhost:3000/payment/cancel
+# Outbound payout (Chi) channel — separate credentials; leave AutoPayoutEnabled=false locally
+PayOsPayout__ClientId=...
+PayOsPayout__ApiKey=...
+PayOsPayout__ChecksumKey=...
+PayOsPayout__BaseUrl=https://api-merchant.payos.vn
+PayOsPayout__AutoPayoutEnabled=false
+PayOsPayout__PayoutCategory=salary
 ```
 
 Provide a committed `.env.example` (the `.gitignore` allows it) with placeholders only.
