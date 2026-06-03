@@ -189,3 +189,4 @@ temp/
 .cursor/
 .agents/
 skills-lock.jsons
+tools/PayOsSignatureDiagnostic/
