@@ -45,7 +45,22 @@ public class ExceptionMiddleware
         }
         catch (AppException ex)
         {
-            _logger.LogWarning(ex, "Handled application exception");
+            // Do not pass `ex` directly to the logger — rendering Exception.StackTrace via
+            // ConsoleLogger throws BadImageFormatException when the exception originates in an
+            // assembly with invalid or missing debug metadata.
+            try
+            {
+                _logger.LogWarning(
+                    "Handled application exception. Type={ExceptionType} Code={Code} Message={Message} Path={Path}",
+                    ex.GetType().FullName,
+                    ex.Code,
+                    ex.Message,
+                    context.Request.Path.Value);
+            }
+            catch
+            {
+                // Swallow logging failure — the HTTP response is written regardless.
+            }
 
             context.Response.ContentType = "application/json";
 
@@ -78,7 +93,21 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception");
+            // Do not pass `ex` directly to the logger — rendering Exception.StackTrace via
+            // ConsoleLogger throws BadImageFormatException (0x80131192) when the exception
+            // originates in an assembly with invalid or missing debug metadata.
+            try
+            {
+                _logger.LogError(
+                    "Unhandled exception. Type={ExceptionType} Message={ExceptionMessage} Path={Path}",
+                    ex.GetType().FullName,
+                    ex.Message,
+                    context.Request.Path.Value);
+            }
+            catch
+            {
+                // Swallow logging failure — the HTTP response is written regardless.
+            }
 
             context.Response.ContentType = "application/json";
             context.Response.StatusCode = 500;
@@ -87,9 +116,22 @@ public class ExceptionMiddleware
             if (_environment.IsDevelopment())
             {
                 details = new List<string> { ex.Message };
-                if (!string.IsNullOrWhiteSpace(ex.StackTrace))
+
+                // ex.StackTrace can itself throw BadImageFormatException when the exception
+                // originates in an assembly with invalid debug metadata — guard it.
+                string? safeStackTrace = null;
+                try
                 {
-                    details.Add(ex.StackTrace);
+                    safeStackTrace = ex.StackTrace;
+                }
+                catch
+                {
+                    safeStackTrace = "StackTrace unavailable";
+                }
+
+                if (!string.IsNullOrWhiteSpace(safeStackTrace))
+                {
+                    details.Add(safeStackTrace);
                 }
             }
 
