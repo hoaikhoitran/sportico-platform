@@ -1,8 +1,5 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -103,23 +100,17 @@ namespace SporticoApp.Infrastructure.Services.Payments
             ValidatePayoutSettings();
             ValidatePayoutRequest(request);
 
-            // Canonical string for signature — sorted alphabetically, core fields only.
-            // PayOS payout signature covers: amount, description, referenceId,
-            // toAccountNumber, toBin (excluding category).
-            var signatureFields = new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["amount"] = request.Amount.ToString(),
-                ["description"] = request.Description,
-                ["referenceId"] = request.ReferenceId,
-                ["toAccountNumber"] = request.ToAccountNumber,
-                ["toBin"] = request.ToBin
-            };
+            // Canonical string covers the five core fields only (category is excluded per spec).
+            var canonicalString = PayOsPayoutSigner.BuildCanonicalString(
+                request.Amount,
+                request.Description,
+                request.ReferenceId,
+                request.ToAccountNumber,
+                request.ToBin);
 
-            var canonicalString = string.Join(
-                "&",
-                signatureFields.Select(p => $"{p.Key}={p.Value}"));
-
-            var signature = GenerateHmacSha256(canonicalString, _settings.ChecksumKey);
+            // PayOS Chi API: the signature must be sent as the "signature" field in the JSON
+            // request body — NOT as an x-signature HTTP header.
+            var signature = PayOsPayoutSigner.Compute(canonicalString, _settings.ChecksumKey);
 
             var body = new Dictionary<string, object?>
             {
@@ -127,7 +118,8 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 ["amount"] = request.Amount,
                 ["description"] = request.Description,
                 ["toBin"] = request.ToBin,
-                ["toAccountNumber"] = request.ToAccountNumber
+                ["toAccountNumber"] = request.ToAccountNumber,
+                ["signature"] = signature
             };
 
             if (!string.IsNullOrWhiteSpace(request.Category))
@@ -140,7 +132,6 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 "/v1/payouts");
 
             AddAuthHeaders(httpRequest, idempotencyKey);
-            httpRequest.Headers.Add("x-signature", signature);
             httpRequest.Content = JsonContent.Create(body);
 
             var response = await _httpClient.SendAsync(httpRequest);
@@ -342,14 +333,5 @@ namespace SporticoApp.Infrastructure.Services.Payments
             }
         }
 
-        private static string GenerateHmacSha256(string data, string key)
-        {
-            var keyBytes = Encoding.UTF8.GetBytes(key);
-            var dataBytes = Encoding.UTF8.GetBytes(data);
-
-            using var hmac = new HMACSHA256(keyBytes);
-            var hash = hmac.ComputeHash(dataBytes);
-            return Convert.ToHexString(hash).ToLowerInvariant();
-        }
     }
 }
