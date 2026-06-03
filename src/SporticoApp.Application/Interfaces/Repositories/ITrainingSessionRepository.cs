@@ -15,6 +15,23 @@ namespace SporticoApp.Application.Interfaces.Repositories
 
         Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses);
 
+        /// <summary>
+        /// Counts active (capacity-occupying) sessions on one availability slot. Optionally excludes a
+        /// session id (used during cancellation to count the OTHER active sessions).
+        /// </summary>
+        Task<int> CountActiveByAvailabilitySlotIdAsync(
+            Guid slotId,
+            IEnumerable<string> statuses,
+            Guid? excludeSessionId = null);
+
+        /// <summary>
+        /// Batch variant: active session counts keyed by availability slot id (slots with zero active
+        /// sessions are absent from the dictionary). Avoids N+1 when mapping a page of slots.
+        /// </summary>
+        Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(
+            IReadOnlyCollection<Guid> slotIds,
+            IEnumerable<string> statuses);
+
         Task<bool> HasOverlapAsync(
             Guid userId,
             DateTime startTime,

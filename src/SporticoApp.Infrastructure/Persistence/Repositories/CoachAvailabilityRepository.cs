@@ -3,6 +3,7 @@ using SporticoApp.Application.DTOs.Availability;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
 using SporticoApp.Shared.Constants;
+using SporticoApp.Shared.Exceptions;
 
 namespace SporticoApp.Infrastructure.Persistence.Repositories
 {
@@ -100,7 +101,18 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
 
         public async Task SaveChangesAsync()
         {
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // The slot's Version token changed under us (e.g. a learner booked a seat while the
+                // coach was cancelling the slot). Surface as a retryable 409 rather than a 500.
+                throw new ConflictException(
+                    ErrorCodes.ScheduleConflict,
+                    "The availability slot was updated concurrently. Please try again.");
+            }
         }
 
         private static IQueryable<CoachAvailabilitySlot> ApplyFilter(

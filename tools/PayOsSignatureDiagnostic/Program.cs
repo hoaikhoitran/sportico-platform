@@ -1,14 +1,22 @@
 // PayOS Chi x-signature variant diagnostic tool.
 //
-// Sends 8 variants of the same /v1/payouts request to PayOS — each with an identical
-// body but a different HMAC signing convention — to identify which canonical string
-// produces a valid x-signature. Stops on the first non-201 response.
+// Sends several variants of the same /v1/payouts request to PayOS — each with the same body
+// but a different x-signature signing convention — to confirm which canonical-string formula
+// PayOS accepts. Variant A is the corrected production formula (encodeURIComponent over the
+// whole body, matching the official PayOS payout SDK); the rest are fallback hypotheses.
 //
 // ⚠  REAL MONEY WARNING ─────────────────────────────────────────────────────
-//   If PayOS returns code=00 for any variant it WILL initiate a real bank
+//   If PayOS returns code=00 / a success state it WILL initiate a real bank
 //   transfer to the configured account. Only run with the intended beneficiary
-//   account and amount.
+//   account and a small amount.
 // ──────────────────────────────────────────────────────────────────────────
+//
+// RESULT CLASSIFICATION (important — do not misread a 403 as success):
+//   code=00 / success-like   -> ACCEPTED variant found, stop.
+//   code=403 (IP not allowed)-> INCONCLUSIVE, stop. The signature was never even checked;
+//                               run this from a whitelisted host (e.g. Azure), not locally.
+//   code=201 (invalid sig)   -> signature rejected, continue to the next variant.
+//   code=20  (bad data)      -> schema/data validation, continue.
 //
 // Usage (PowerShell — from repo root):
 //   $env:PAYOS_PAYOUT_CLIENTID        = "..."   # PayOsPayout__ClientId from Azure
@@ -19,21 +27,29 @@
 //   $env:PAYOS_PAYOUT_AMOUNT          = "10000"
 //   dotnet run --project tools/PayOsSignatureDiagnostic
 //
-// Or add keys to the root .env — the tool loads it automatically.
-// Never commit credentials. Never log ChecksumKey, ApiKey, ClientId, or signature value.
+// Process environment variables take precedence over the repo .env (which only fills gaps).
+// Never commit credentials. Never log ChecksumKey, ApiKey, ClientId, or the signature value.
 
-using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Web;
 
-// ── Load .env from repo root if present ──────────────────────────────────────
-var envFile = Path.Combine(FindRepoRoot() ?? ".", ".env");
-if (File.Exists(envFile)) { DotNetEnv.Env.Load(envFile); Log($"[env] loaded {envFile}"); }
+// ── Load .env WITHOUT clobbering real process env vars (process env wins) ─────
+var repoRoot = FindRepoRoot();
+var envFile  = Path.Combine(repoRoot ?? ".", ".env");
+if (File.Exists(envFile))
+{
+    DotNetEnv.Env.Load(envFile, new DotNetEnv.LoadOptions(clobberExistingVars: false));
+    Log($"[env] loaded {envFile} (process env takes precedence; .env only fills gaps)");
+}
+else
+{
+    Log("[env] no .env file found; using process environment only");
+}
 
-// ── Credentials & payout data ─────────────────────────────────────────────────
+// ── Credentials & payout data (report source safely, never values) ───────────
 var clientId    = Require("PAYOS_PAYOUT_CLIENTID");
 var apiKey      = Require("PAYOS_PAYOUT_APIKEY");
 var checksumKey = Require("PAYOS_PAYOUT_CHECKSUMKEY");
@@ -47,74 +63,139 @@ var maskedAcct  = MaskAccount(toAcctNum);
 var runId       = DateTime.UtcNow.ToString("yyyyMMddHHmm");
 var description = "SPORTICO WD";
 
-Log($"\n{'=',72}");
+Log($"\n{new string('=', 72)}");
 Log($"PayOS Chi x-signature Diagnostic  ·  run={runId}  amount={amount}  toBin={toBin}");
 Log($"  toAccountNumber (masked) : {maskedAcct}");
 Log($"  baseUrl                  : {baseUrl}");
 Log($"  checksumKeyPresent       : {!string.IsNullOrEmpty(checksumKey)}");
 Log($"  checksumKeyLength        : {checksumKey.Length}");
-Log($"{'=',72}\n");
+Log($"{new string('=', 72)}\n");
 
 using var http = new HttpClient { BaseAddress = new Uri(baseUrl) };
 
-// ── Variant helper ────────────────────────────────────────────────────────────
-// Each variant sends the SAME body but a DIFFERENT canonical string → HMAC.
-// The body always contains exactly: referenceId, amount, description, toBin, toAccountNumber.
-// The only change between variants is how we build the string that is HMAC'd for x-signature.
+bool accepted     = false;   // a variant returned success → stop, we found it
+bool inconclusive = false;   // 403 IP block → stop, cannot diagnose from here
 
-bool found = false;
+// Each variant: a body dict + a function that builds the canonical string to HMAC.
+// Variant A is the corrected production formula. The body sent is always the documented schema.
 
+// ── Variant A — corrected production: encodeURIComponent over the whole body ─
+await TryVariant("A", "CORRECTED PRODUCTION: encodeURIComponent over whole sorted body",
+    BodyOf($"{runId}-A"), b => CanonicalEncoded(b));
+
+// ── Variant B — corrected formula but with category included ─────────────────
+{
+    var body = BodyOf($"{runId}-B");
+    body["category"] = new[] { "salary" };
+    await TryVariant("B", "encodeURIComponent whole body + category=[\"salary\"]",
+        body, b => CanonicalEncoded(b));
+}
+
+// ── Variant C — encodeURIComponent + idempotencyKey folded into canonical ────
+{
+    var body = BodyOf($"{runId}-C");
+    await TryVariant("C", "encodeURIComponent + idempotencyKey in canonical",
+        body, b =>
+        {
+            var withKey = new Dictionary<string, object?>(b) { ["idempotencyKey"] = b["referenceId"] };
+            return CanonicalEncoded(withKey);
+        });
+}
+
+// ── Variant D — OLD broken formula: raw key=value, NO url-encoding ───────────
+// Expected to FAIL (code=201). Confirms the url-encoding was the bug.
+await TryVariant("D", "OLD broken: raw key=value, no url-encoding (expected to fail)",
+    BodyOf($"{runId}-D"), b => CanonicalRaw(b));
+
+// ── Variant E — HMAC over minified JSON body ─────────────────────────────────
+await TryVariant("E", "HMAC over minified JSON body",
+    BodyOf($"{runId}-E"),
+    b => JsonSerializer.Serialize(SortedClone(b),
+        new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+
+// ── Variant F — description without space (SPORTICOWD) ───────────────────────
+{
+    var body = BodyOf($"{runId}-F");
+    body["description"] = "SPORTICOWD";
+    await TryVariant("F", "description=SPORTICOWD (no space) + encodeURIComponent",
+        body, b => CanonicalEncoded(b));
+}
+
+// ── Variant G — referenceId (body) ≠ x-idempotency-key (header) ──────────────
+{
+    var body = BodyOf($"{runId}-G");
+    await TryVariant("G", "referenceId ≠ idempotencyKey header (encodeURIComponent)",
+        body, b => CanonicalEncoded(b), idempotencyOverride: $"{runId}-G-idem-diff");
+}
+
+// ── Variant H — bare referenceId == idempotencyKey, no suffix ───────────────
+await TryVariant("H", "bare referenceId=idempotencyKey, encodeURIComponent",
+    BodyOf($"{runId}-H"), b => CanonicalEncoded(b));
+
+// ── Summary ──────────────────────────────────────────────────────────────────
+Log($"\n{new string('=', 72)}");
+if (inconclusive)
+{
+    Log("⚠ INCONCLUSIVE: PayOS returned code=403 (IP not allowed) — the signature was never");
+    Log("  validated. This machine's IP is not whitelisted for the PayOS Chi channel.");
+    Log("  Re-run from a whitelisted host (e.g. the Azure App Service) to test the signature.");
+    Log("  DO NOT treat 403 as a passing or failing signature result.");
+}
+else if (accepted)
+{
+    Log("✓ A variant was ACCEPTED (success/processing). See the ★ ACCEPTED line above.");
+}
+else
+{
+    Log("✗ No variant was accepted; all reachable variants returned code=201 (invalid signature).");
+    Log("  Variant A is byte-for-byte identical to the official PayOS payout SDK, so if even A");
+    Log("  is rejected with code=201, the ChecksumKey is wrong for this ClientId/ApiKey pair,");
+    Log("  or this merchant account's Chi/Payout channel is not provisioned.");
+    Log("  Contact PayOS support with one referenceId above; do NOT keep guessing canonical strings.");
+}
+Log($"{new string('=', 72)}\n");
+
+// ── Variant runner ─────────────────────────────────────────────────────────────
 async Task TryVariant(
     string label,
     string variantDesc,
-    string refId,
-    string idempotencyKeyValue,
-    string canonicalString,
-    string bodyDescription,
-    int bodyAmount,
-    bool differentRef = false)
+    Dictionary<string, object?> body,
+    Func<Dictionary<string, object?>, string> buildCanonical,
+    string? idempotencyOverride = null)
 {
-    if (found) return;
+    if (accepted || inconclusive) return;
 
-    Log($"{'─',72}");
+    var refId          = (string)body["referenceId"]!;
+    var idempotencyKey = idempotencyOverride ?? refId;
+
+    Log($"{new string('-', 72)}");
     Log($"Variant {label}: {variantDesc}");
 
-    var sig = HmacHex(canonicalString, checksumKey);
-
-    // Body is always the 5 documented fields — only x-signature changes
-    var body = new Dictionary<string, object?>
-    {
-        ["referenceId"]     = refId,
-        ["amount"]          = bodyAmount,
-        ["description"]     = bodyDescription,
-        ["toBin"]           = toBin,
-        ["toAccountNumber"] = toAcctNum,
-    };
-
-    // Safe log — never log sig value or key
-    var safeCanonical = canonicalString
-        .Replace(toAcctNum, maskedAcct);
+    var canonical = buildCanonical(body);
+    var sig       = HmacHex(canonical, checksumKey);
+    var safeCanon = canonical.Replace(toAcctNum, maskedAcct);
 
     Log($"  referenceId         : {refId}");
-    Log($"  idempotencyKey      : {idempotencyKeyValue}");
-    Log($"  refEqualsIdempotency: {refId == idempotencyKeyValue}");
-    Log($"  canonicalStrSafe    : {safeCanonical}");
-    Log($"  signatureLength     : {sig.Length}");
+    Log($"  idempotencyKey      : {idempotencyKey}");
+    Log($"  refEqualsIdempotency: {refId == idempotencyKey}");
     Log($"  bodyFields          : [{string.Join(", ", body.Keys)}]");
+    Log($"  canonicalStrSafe    : {safeCanon}");
+    Log($"  signatureLength     : {sig.Length}");
 
     using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/payouts");
-    req.Headers.Add("x-client-id",      clientId);
-    req.Headers.Add("x-api-key",        apiKey);
-    req.Headers.Add("x-idempotency-key", idempotencyKeyValue);
-    req.Headers.Add("x-signature",      sig);
+    req.Headers.Add("x-client-id",       clientId);
+    req.Headers.Add("x-api-key",         apiKey);
+    req.Headers.Add("x-idempotency-key", idempotencyKey);
+    req.Headers.Add("x-signature",       sig);
     req.Content = JsonContent.Create(body);
 
-    HttpResponseMessage resp;
     string rawJson;
+    int httpStatus;
     try
     {
-        resp    = await http.SendAsync(req);
-        rawJson = await resp.Content.ReadAsStringAsync();
+        var resp   = await http.SendAsync(req);
+        httpStatus = (int)resp.StatusCode;
+        rawJson    = await resp.Content.ReadAsStringAsync();
     }
     catch (Exception ex)
     {
@@ -122,169 +203,110 @@ async Task TryVariant(
         return;
     }
 
-    using var doc = JsonDocument.Parse(rawJson);
-    var root      = doc.RootElement;
-    var code      = root.TryGetProperty("code", out var cp) ? cp.GetString() : "?";
-    var respDesc  = root.TryGetProperty("desc", out var dp) ? dp.GetString() : "?";
+    string code = "?", respDesc = "?";
+    try
+    {
+        using var doc = JsonDocument.Parse(rawJson);
+        var root = doc.RootElement;
+        code     = root.TryGetProperty("code", out var cp) ? cp.GetString() ?? "?" : "?";
+        respDesc = root.TryGetProperty("desc", out var dp) ? dp.GetString() ?? "?" : "?";
+    }
+    catch { /* non-JSON body — log raw below */ }
 
-    Log($"  httpStatus  : {(int)resp.StatusCode}");
+    Log($"  httpStatus  : {httpStatus}");
     Log($"  payosCode   : {code}");
     Log($"  payosDesc   : {respDesc}");
     Log($"  rawResponse : {rawJson}");
 
-    if (code != "201")
+    // ── Classification ──────────────────────────────────────────────────────
+    if (code is "403" || respDesc.Contains("IP", StringComparison.OrdinalIgnoreCase))
     {
-        Log($"\n★ FIRST NON-201 RESPONSE on Variant {label}");
-        Log($"  code={code}  desc={respDesc}");
-        Log($"  → Update production PayOsPayoutSigner to use this canonical string convention.");
-        found = true;
+        Log($"\n⚠ Variant {label}: code=403 IP NOT ALLOWED → INCONCLUSIVE. Stopping.");
+        inconclusive = true;
+        return;
     }
-}
 
-// ── Variant A — current production: sorted 5-field ──────────────────────────
-// amount=<n>&description=<d>&referenceId=<r>&toAccountNumber=<a>&toBin=<b>
-{
-    var refId = $"{runId}-A";
-    var canonical = Sorted(new()
+    if (code is "00" || code is "200")
     {
-        ["amount"]          = amount.ToString(),
-        ["description"]     = description,
-        ["referenceId"]     = refId,
-        ["toAccountNumber"] = toAcctNum,
-        ["toBin"]           = toBin,
-    });
-    await TryVariant("A", "current: sorted 5-field canonical", refId, refId, canonical, description, amount);
-}
+        Log($"\n★ ACCEPTED on Variant {label}: code={code} desc={respDesc}");
+        Log($"  This canonical-string convention is correct for production.");
+        accepted = true;
+        return;
+    }
 
-// ── Variant B — sorted 5-field + x-idempotency-key included in canonical ────
-{
-    var refId = $"{runId}-B";
-    var canonical = Sorted(new()
+    if (code is "201")
     {
-        ["amount"]          = amount.ToString(),
-        ["description"]     = description,
-        ["idempotencyKey"]  = refId,        // same value as referenceId
-        ["referenceId"]     = refId,
-        ["toAccountNumber"] = toAcctNum,
-        ["toBin"]           = toBin,
-    });
-    await TryVariant("B", "sorted 5-field + idempotencyKey in canonical", refId, refId, canonical, description, amount);
-}
+        Log($"  → code=201 invalid signature; trying next variant.");
+        return;
+    }
 
-// ── Variant C — HMAC over minified JSON body string ─────────────────────────
-// PayOS might sign the JSON directly rather than a key=value canonical string
-{
-    var refId = $"{runId}-C";
-    var jsonBody = JsonSerializer.Serialize(new Dictionary<string, object?>
+    if (code is "20")
     {
-        ["referenceId"]     = refId,
-        ["amount"]          = amount,
-        ["description"]     = description,
-        ["toBin"]           = toBin,
-        ["toAccountNumber"] = toAcctNum,
-    });
-    await TryVariant("C", "HMAC over minified JSON body", refId, refId, jsonBody, description, amount);
+        Log($"  → code=20 schema/data validation; trying next variant.");
+        return;
+    }
+
+    Log($"  → unrecognised code={code}; trying next variant.");
 }
 
-// ── Variant D — fields in body insertion order (not alphabetically sorted) ──
+// ── Canonical builders (mirror production PayOsPayoutSigner) ──────────────────
+
+// encodeURIComponent over sorted body (the corrected production formula).
+static string CanonicalEncoded(Dictionary<string, object?> body)
 {
-    var refId = $"{runId}-D";
-    var canonical = $"referenceId={refId}&amount={amount}&description={description}&toBin={toBin}&toAccountNumber={toAcctNum}";
-    await TryVariant("D", "body insertion order (not sorted)", refId, refId, canonical, description, amount);
+    var sorted = new SortedDictionary<string, string>(StringComparer.Ordinal);
+    foreach (var kv in body) sorted[kv.Key] = Stringify(kv.Value);
+    return string.Join("&", sorted.Select(p => $"{Enc(p.Key)}={Enc(p.Value)}"));
 }
 
-// ── Variant E — URL-encoded values ──────────────────────────────────────────
-// Some APIs use %20 for spaces in the canonical string
+// Raw key=value with NO url-encoding (the OLD broken formula).
+static string CanonicalRaw(Dictionary<string, object?> body)
 {
-    var refId = $"{runId}-E";
-    var canonical = Sorted(new()
-    {
-        ["amount"]          = amount.ToString(),
-        ["description"]     = Uri.EscapeDataString(description),   // "SPORTICO%20WD"
-        ["referenceId"]     = refId,
-        ["toAccountNumber"] = toAcctNum,
-        ["toBin"]           = toBin,
-    });
-    await TryVariant("E", "URL-encoded field values in canonical", refId, refId, canonical, description, amount);
+    var sorted = new SortedDictionary<string, string>(StringComparer.Ordinal);
+    foreach (var kv in body) sorted[kv.Key] = Stringify(kv.Value);
+    return string.Join("&", sorted.Select(p => $"{p.Key}={p.Value}"));
 }
 
-// ── Variant F — description without space (SPORTICOWD) ──────────────────────
-// Tests whether the space in "SPORTICO WD" causes PayOS to reject the signature
+static Dictionary<string, object?> SortedClone(Dictionary<string, object?> body)
 {
-    var refId      = $"{runId}-F";
-    var descNoSpc  = "SPORTICOWD";
-    var canonical  = Sorted(new()
-    {
-        ["amount"]          = amount.ToString(),
-        ["description"]     = descNoSpc,
-        ["referenceId"]     = refId,
-        ["toAccountNumber"] = toAcctNum,
-        ["toBin"]           = toBin,
-    });
-    // Body also uses the no-space description so signature and body are consistent
-    await TryVariant("F", "description=SPORTICOWD (no space) in body and canonical", refId, refId, canonical, descNoSpc, amount);
+    var sorted = new SortedDictionary<string, object?>(body, StringComparer.Ordinal);
+    return new Dictionary<string, object?>(sorted);
 }
 
-// ── Variant G — referenceId (body) ≠ idempotencyKey (header) ────────────────
-// Tests if PayOS signs over idempotencyKey from the header rather than referenceId from body.
-// Canonical is built with the body referenceId; idempotency-key header differs.
+Dictionary<string, object?> BodyOf(string refId) => new()
 {
-    var refId          = $"{runId}-G-ref";
-    var idempotencyVal = $"{runId}-G-idempotency-different";
-    var canonical      = Sorted(new()
-    {
-        ["amount"]          = amount.ToString(),
-        ["description"]     = description,
-        ["referenceId"]     = refId,    // signed using body referenceId
-        ["toAccountNumber"] = toAcctNum,
-        ["toBin"]           = toBin,
-    });
-    await TryVariant("G", "referenceId≠idempotencyKey: PayOS may sign over idempotency header",
-        refId, idempotencyVal, canonical, description, amount);
-}
+    ["referenceId"]     = refId,
+    ["amount"]          = amount,
+    ["description"]     = description,
+    ["toBin"]           = toBin,
+    ["toAccountNumber"] = toAcctNum,
+};
 
-// ── Variant H — referenceId = idempotencyKey = bare UUID (no retry suffix) ──
-// Tests if a plain UUID referenceId (no "-retry-" suffix) behaves differently
+// ── Low-level helpers ──────────────────────────────────────────────────────────
+
+static string Stringify(object? value) => value switch
 {
-    var baseRef   = $"{runId}-H";
-    var canonical = Sorted(new()
-    {
-        ["amount"]          = amount.ToString(),
-        ["description"]     = description,
-        ["referenceId"]     = baseRef,
-        ["toAccountNumber"] = toAcctNum,
-        ["toBin"]           = toBin,
-    });
-    await TryVariant("H", "bare UUID referenceId=idempotencyKey (no -retry- suffix)",
-        baseRef, baseRef, canonical, description, amount);
-}
+    null     => string.Empty,
+    string s => s,
+    bool b   => b ? "true" : "false",
+    int or long or short or decimal or double or float
+             => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty,
+    _        => JsonSerializer.Serialize(value,
+                    new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }),
+};
 
-// ── Summary ───────────────────────────────────────────────────────────────────
-Log($"\n{'=',72}");
-if (!found)
+// Exact .NET equivalent of encodeURIComponent.
+static string Enc(string value)
 {
-    Log("✗ All variants returned code=201 (invalid signature).");
-    Log("  The ChecksumKey is almost certainly wrong for this PayOS Chi channel.");
-    Log("  Contact PayOS support with one referenceId from above and ask them to");
-    Log("  verify the exact ClientId/ApiKey/ChecksumKey set and signature formula");
-    Log("  for POST /v1/payouts on your merchant account.");
+    var escaped = Uri.EscapeDataString(value);
+    return escaped.Replace("%21", "!").Replace("%27", "'")
+                  .Replace("%28", "(").Replace("%29", ")").Replace("%2A", "*");
 }
-Log($"{'=',72}\n");
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 static string HmacHex(string data, string key)
 {
-    var keyBytes  = Encoding.UTF8.GetBytes(key);
-    var dataBytes = Encoding.UTF8.GetBytes(data);
-    using var hmac = new HMACSHA256(keyBytes);
-    return Convert.ToHexString(hmac.ComputeHash(dataBytes)).ToLowerInvariant();
-}
-
-static string Sorted(Dictionary<string, string> fields)
-{
-    var sorted = new SortedDictionary<string, string>(fields, StringComparer.Ordinal);
-    return string.Join("&", sorted.Select(p => $"{p.Key}={p.Value}"));
+    using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(key));
+    return Convert.ToHexString(hmac.ComputeHash(Encoding.UTF8.GetBytes(data))).ToLowerInvariant();
 }
 
 static string MaskAccount(string? acct)
@@ -300,7 +322,7 @@ static string Require(string key)
     var val = Environment.GetEnvironmentVariable(key);
     if (string.IsNullOrWhiteSpace(val))
     {
-        Console.Error.WriteLine($"FATAL: required env var {key} is not set.");
+        Console.Error.WriteLine($"FATAL: required env var {key} is not set (process env or .env).");
         Environment.Exit(1);
     }
     return val!;

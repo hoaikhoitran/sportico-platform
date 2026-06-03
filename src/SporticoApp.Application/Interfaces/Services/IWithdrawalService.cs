@@ -39,6 +39,13 @@ namespace SporticoApp.Application.Interfaces.Services
         /// <summary>Admin: query PayOS for the latest payout state and update the withdrawal.</summary>
         Task<Result<WithdrawalRequestResponse>> RefreshPayoutStatusAsync(Guid id);
 
+        /// <summary>
+        /// Background reconciliation: for a single <c>processing</c> withdrawal that has a PayOS payout
+        /// id, poll PayOS and finalize/roll back accordingly. No-op (returns false) if the withdrawal
+        /// is missing, not processing, or has no payout id. Safe to call repeatedly (idempotent).
+        /// </summary>
+        Task<bool> ReconcileSingleProcessingPayoutAsync(Guid id);
+
         /// <summary>Admin: retry a failed payout with a new idempotency key.</summary>
         Task<Result<WithdrawalRequestResponse>> RetryPayoutAsync(Guid id);
 

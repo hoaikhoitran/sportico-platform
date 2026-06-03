@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using SporticoApp.Application.DTOs.TrainingSessions;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
@@ -57,6 +56,48 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .AsNoTracking()
                 .Where(x => x.BookingId == bookingId && statuses.Contains(x.Status))
                 .CountAsync();
+        }
+
+        public async Task<int> CountActiveByAvailabilitySlotIdAsync(
+            Guid slotId,
+            IEnumerable<string> statuses,
+            Guid? excludeSessionId = null)
+        {
+            var statusList = statuses.ToList();
+
+            var query = _context.TrainingSessions
+                .AsNoTracking()
+                .Where(x => x.AvailabilitySlotId == slotId && statusList.Contains(x.Status));
+
+            if (excludeSessionId.HasValue)
+            {
+                query = query.Where(x => x.Id != excludeSessionId.Value);
+            }
+
+            return await query.CountAsync();
+        }
+
+        public async Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(
+            IReadOnlyCollection<Guid> slotIds,
+            IEnumerable<string> statuses)
+        {
+            if (slotIds.Count == 0)
+            {
+                return new Dictionary<Guid, int>();
+            }
+
+            var statusList = statuses.ToList();
+
+            var grouped = await _context.TrainingSessions
+                .AsNoTracking()
+                .Where(x => x.AvailabilitySlotId != null
+                            && slotIds.Contains(x.AvailabilitySlotId.Value)
+                            && statusList.Contains(x.Status))
+                .GroupBy(x => x.AvailabilitySlotId!.Value)
+                .Select(g => new { SlotId = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            return grouped.ToDictionary(x => x.SlotId, x => x.Count);
         }
 
         public async Task<bool> HasOverlapAsync(
@@ -119,23 +160,20 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             _context.TrainingSessions.Add(session);
             try
             {
+                // This single SaveChanges persists the new session AND the slot mutation (status +
+                // Version bump) tracked by the same DbContext, atomically.
                 await _context.SaveChangesAsync();
             }
-            catch (DbUpdateException ex) when (IsActiveSlotUniqueViolation(ex))
+            catch (DbUpdateConcurrencyException)
             {
-                // A concurrent request already attached an active session to this slot.
-                // The filtered unique index uq_training_sessions_active_slot rejected the insert;
-                // surface it as a clean 409 ScheduleConflict instead of a 500.
+                // The availability slot's optimistic concurrency token (Version) changed: another
+                // learner booked a seat on the same slot concurrently. Surface as a clean 409 so the
+                // loser retries against the up-to-date seat count.
                 throw new ConflictException(
                     ErrorCodes.ScheduleConflict,
-                    "Availability slot is no longer available");
+                    "Availability slot was just updated by another booking. Please try again.");
             }
         }
-
-        private static bool IsActiveSlotUniqueViolation(DbUpdateException ex)
-            => ex.InnerException is PostgresException pg
-               && pg.SqlState == PostgresErrorCodes.UniqueViolation
-               && pg.ConstraintName == "uq_training_sessions_active_slot";
 
         public Task AddWithoutSaveAsync(TrainingSession session)
         {
@@ -145,7 +183,19 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
 
         public async Task SaveChangesAsync()
         {
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // A tracked availability slot's Version token changed under us (e.g. a concurrent
+                // booking while this cancellation tried to re-open the slot). Surface as a retryable
+                // 409 rather than a 500.
+                throw new ConflictException(
+                    ErrorCodes.ScheduleConflict,
+                    "The availability slot was updated concurrently. Please try again.");
+            }
         }
 
         private static IQueryable<TrainingSession> ApplyFilter(

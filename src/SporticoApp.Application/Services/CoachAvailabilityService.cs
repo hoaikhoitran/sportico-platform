@@ -16,19 +16,43 @@ namespace SporticoApp.Application.Services
     {
         private readonly ICoachAvailabilityRepository _availabilityRepository;
         private readonly ICoachRepository _coachRepository;
+        private readonly ITrainingSessionRepository _trainingSessionRepository;
         private readonly IValidator<CreateCoachAvailabilitySlotRequest> _createValidator;
         private readonly IValidator<CoachAvailabilitySlotFilterRequest> _filterValidator;
 
         public CoachAvailabilityService(
             ICoachAvailabilityRepository availabilityRepository,
             ICoachRepository coachRepository,
+            ITrainingSessionRepository trainingSessionRepository,
             IValidator<CreateCoachAvailabilitySlotRequest> createValidator,
             IValidator<CoachAvailabilitySlotFilterRequest> filterValidator)
         {
             _availabilityRepository = availabilityRepository;
             _coachRepository = coachRepository;
+            _trainingSessionRepository = trainingSessionRepository;
             _createValidator = createValidator;
             _filterValidator = filterValidator;
+        }
+
+        /// <summary>
+        /// Maps a page of slots to responses, batch-loading the active session count per slot so the
+        /// capacity fields (booked/remaining/isFull) are accurate rather than assumed zero.
+        /// </summary>
+        private async Task<List<CoachAvailabilitySlotResponse>> MapWithCapacityAsync(
+            IReadOnlyCollection<CoachAvailabilitySlot> slots)
+        {
+            if (slots.Count == 0)
+            {
+                return new List<CoachAvailabilitySlotResponse>();
+            }
+
+            var counts = await _trainingSessionRepository.CountActiveByAvailabilitySlotIdsAsync(
+                slots.Select(s => s.Id).ToList(),
+                TrainingSessionStatuses.CapacityOccupying);
+
+            return slots
+                .Select(s => s.ToResponse(counts.TryGetValue(s.Id, out var c) ? c : 0))
+                .ToList();
         }
 
         public async Task<Result<CoachAvailabilitySlotResponse>> CreateSlotAsync(
@@ -73,6 +97,8 @@ namespace SporticoApp.Application.Services
                 StartTime = request.StartTime,
                 EndTime = request.EndTime,
                 Status = CoachAvailabilitySlotStatuses.Available,
+                // Default to 1 (private slot) when the client omits it — backward compatible.
+                MaxParticipants = request.MaxParticipants ?? 1,
                 Location = request.Location?.Trim(),
                 MeetingUrl = request.MeetingUrl?.Trim(),
                 IsOnline = request.IsOnline,
@@ -83,7 +109,8 @@ namespace SporticoApp.Application.Services
 
             await _availabilityRepository.AddAsync(slot);
 
-            return Result<CoachAvailabilitySlotResponse>.Success(slot.ToResponse());
+            // A brand-new slot has no bookings yet.
+            return Result<CoachAvailabilitySlotResponse>.Success(slot.ToResponse(bookedParticipants: 0));
         }
 
         public async Task<Result<PagedResult<CoachAvailabilitySlotResponse>>> GetMySlotsAsync(
@@ -106,7 +133,7 @@ namespace SporticoApp.Application.Services
             var (items, totalCount) = await _availabilityRepository.GetByCoachPagedAsync(coachId, filter);
 
             var response = new PagedResult<CoachAvailabilitySlotResponse>(
-                items.Select(x => x.ToResponse()).ToList(),
+                await MapWithCapacityAsync(items),
                 totalCount,
                 filter.PageNumber,
                 filter.PageSize);
@@ -139,10 +166,13 @@ namespace SporticoApp.Application.Services
                     "Coach not found");
             }
 
+            // The repository already filters to status=available && future. Because a slot is flipped
+            // to 'booked' only when its last seat is taken, status=available implies remaining>0 — so
+            // full slots are excluded. Capacity fields are still populated for display.
             var (items, totalCount) = await _availabilityRepository.GetAvailableByCoachPagedAsync(coachId, filter);
 
             var response = new PagedResult<CoachAvailabilitySlotResponse>(
-                items.Select(x => x.ToResponse()).ToList(),
+                await MapWithCapacityAsync(items),
                 totalCount,
                 filter.PageNumber,
                 filter.PageSize);
@@ -168,13 +198,6 @@ namespace SporticoApp.Application.Services
                     "Availability slot is not owned by the current coach");
             }
 
-            if (slot.Status == CoachAvailabilitySlotStatuses.Booked)
-            {
-                throw new ConflictException(
-                    ErrorCodes.InvalidTrainingSessionStatus,
-                    "Cannot cancel a slot that has already been booked");
-            }
-
             if (slot.Status == CoachAvailabilitySlotStatuses.Cancelled)
             {
                 throw new ConflictException(
@@ -182,12 +205,28 @@ namespace SporticoApp.Application.Services
                     "Slot is already cancelled");
             }
 
+            // Option A (safer): block cancelling a group slot that still has active bookings, rather
+            // than silently cancelling learners' sessions. A partially-booked slot is status=available
+            // (not 'booked'), so a status check alone is insufficient — count active sessions instead.
+            var activeBookings = await _trainingSessionRepository.CountActiveByAvailabilitySlotIdAsync(
+                slot.Id,
+                TrainingSessionStatuses.CapacityOccupying);
+
+            if (activeBookings > 0)
+            {
+                throw new ConflictException(
+                    ErrorCodes.InvalidTrainingSessionStatus,
+                    "Cannot cancel a slot that has active sessions");
+            }
+
             slot.Status = CoachAvailabilitySlotStatuses.Cancelled;
             slot.UpdatedAt = DateTime.UtcNow;
+            slot.Version++;
 
             await _availabilityRepository.SaveChangesAsync();
 
-            return Result<CoachAvailabilitySlotResponse>.Success(slot.ToResponse());
+            // No active bookings (we just verified), so booked = 0.
+            return Result<CoachAvailabilitySlotResponse>.Success(slot.ToResponse(bookedParticipants: 0));
         }
     }
 }

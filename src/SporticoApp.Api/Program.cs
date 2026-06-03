@@ -99,6 +99,12 @@ namespace SporticoApp.Api
             builder.Services.AddApplicationDI();
             builder.Services.AddInfrastructureDI(builder.Configuration);
 
+            // Background reconciliation of PayOS payout status for processing withdrawals.
+            builder.Services.Configure<SporticoApp.Application.Options.WithdrawalPayoutReconciliationOptions>(
+                builder.Configuration.GetSection(
+                    SporticoApp.Application.Options.WithdrawalPayoutReconciliationOptions.SectionName));
+            builder.Services.AddHostedService<SporticoApp.Api.BackgroundServices.WithdrawalPayoutReconciliationService>();
+
             var jwtSecretKey = builder.Configuration["JWT:SecretKey"];
             var jwtIssuer = builder.Configuration["JWT:Issuer"];
             var jwtAudience = builder.Configuration["JWT:Audience"];

@@ -20,6 +20,13 @@ namespace SporticoApp.Application.Interfaces.Repositories
         Task<(List<WithdrawalRequest> Items, int TotalCount)> GetPagedAsync(
             WithdrawalRequestFilterRequest filter);
 
+        /// <summary>
+        /// Returns the ids of withdrawals that are still <c>processing</c> AND have a PayOS payout id,
+        /// oldest-processing first, capped at <paramref name="batchSize"/>. Used by the background
+        /// reconciliation job to poll PayOS for the final payout outcome.
+        /// </summary>
+        Task<IReadOnlyList<Guid>> GetProcessingPayoutIdsAsync(int batchSize);
+
         Task AddAsync(WithdrawalRequest request);
 
         Task AddWithoutSaveAsync(WithdrawalRequest request);

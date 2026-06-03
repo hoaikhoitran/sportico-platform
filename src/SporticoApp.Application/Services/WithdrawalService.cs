@@ -498,20 +498,59 @@ namespace SporticoApp.Application.Services
                     "No PayOS payout id found on this withdrawal. Cannot refresh status.");
             }
 
+            await ReconcilePayoutAsync(withdrawal);
+
+            return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Background reconciliation: poll PayOS for one processing withdrawal.
+        // Shares the exact same finalize/rollback logic as the manual refresh endpoint.
+        // ─────────────────────────────────────────────────────────────────────
+        public async Task<bool> ReconcileSingleProcessingPayoutAsync(Guid id)
+        {
+            var withdrawal = await _withdrawalRepository.GetByIdForUpdateAsync(id);
+
+            // Skip silently (no throw) for anything that is not an in-flight payout. The row lock
+            // from GetByIdForUpdateAsync ensures a concurrent finalize (manual refresh / retry) is
+            // already reflected here, so we never double-finalize.
+            if (withdrawal == null ||
+                withdrawal.Status != WithdrawalRequestStatuses.Processing ||
+                string.IsNullOrWhiteSpace(withdrawal.PayOsPayoutId))
+            {
+                return false;
+            }
+
+            await ReconcilePayoutAsync(withdrawal);
+            return true;
+        }
+
+        /// <summary>
+        /// Polls PayOS for the latest payout state of an already-loaded withdrawal and finalizes
+        /// (paid), rolls back (failed), or leaves it processing. A fetch failure is recorded but
+        /// never rolls funds back. All wallet/withdrawal mutations are persisted inside this method.
+        /// </summary>
+        private async Task ReconcilePayoutAsync(WithdrawalRequest withdrawal)
+        {
             PayOsPayoutDetailResponse detailResponse;
             try
             {
-                detailResponse = await _payOsPayoutService.GetPayoutDetailAsync(withdrawal.PayOsPayoutId);
+                detailResponse = await _payOsPayoutService.GetPayoutDetailAsync(withdrawal.PayOsPayoutId!);
             }
             catch (Exception ex)
             {
-                // Network failure or non-JSON PayOS response — leave in processing state and let
-                // admin retry the refresh once PayOS is reachable again.
+                // Network failure or non-JSON PayOS response — leave in processing state. Never roll
+                // back on an unknown result (PayOS may have paid; rolling back risks a double-spend).
+                _logger.LogWarning(
+                    "PayOS payout reconcile fetch failed; staying processing. " +
+                    "withdrawalId={WithdrawalId} payoutId={PayoutId} error={Error}",
+                    withdrawal.Id, withdrawal.PayOsPayoutId, ex.Message);
+
                 withdrawal.FailureReason =
-                    $"PayOS detail fetch failed: {ex.Message}. Refresh again when PayOS is reachable.";
+                    $"PayOS detail fetch failed: {ex.Message}. Will retry automatically.";
                 withdrawal.UpdatedAt = DateTime.UtcNow;
                 await _withdrawalRepository.SaveChangesAsync();
-                return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
+                return;
             }
 
             withdrawal.PayOsRawResponse = detailResponse.RawJson;
@@ -546,8 +585,6 @@ namespace SporticoApp.Application.Services
                     await _withdrawalRepository.SaveChangesAsync();
                     break;
             }
-
-            return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
         }
 
         // ─────────────────────────────────────────────────────────────────────

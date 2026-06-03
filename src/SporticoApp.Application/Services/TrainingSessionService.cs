@@ -217,14 +217,34 @@ namespace SporticoApp.Application.Services
                     "Learner has a schedule conflict at this time");
             }
 
-            // ── 6. Create session and mark slot as booked ─────────────────────────
+            // ── 6. Capacity check (group slots) ───────────────────────────────────
+            // A slot can back up to MaxParticipants active sessions. Count the seats already taken;
+            // the slot's optimistic concurrency token (bumped below) makes this race-safe so two
+            // learners cannot both claim the last seat.
+            var activeCount = await _trainingSessionRepository.CountActiveByAvailabilitySlotIdAsync(
+                slot.Id,
+                TrainingSessionStatuses.CapacityOccupying);
+
+            if (activeCount >= slot.MaxParticipants)
+            {
+                throw new ConflictException(
+                    ErrorCodes.ScheduleConflict,
+                    "Availability slot is full");
+            }
+
+            // ── 7. Create session and update slot capacity state ──────────────────
             var session = request.ToEntity(booking.LearnerId, booking.CoachId, slot);
 
-            slot.Status = CoachAvailabilitySlotStatuses.Booked;
+            // Mark booked only when this booking takes the LAST seat; otherwise keep it available so
+            // more learners can still book. For MaxParticipants=1 this reproduces the old behaviour.
+            slot.Status = (activeCount + 1 >= slot.MaxParticipants)
+                ? CoachAvailabilitySlotStatuses.Booked
+                : CoachAvailabilitySlotStatuses.Available;
             slot.UpdatedAt = DateTime.UtcNow;
+            slot.Version++; // optimistic concurrency: collide with any concurrent booking of this slot
 
             // Session insert + slot update share the one scoped DbContext, so this single
-            // SaveChanges persists both atomically (the new session and the slot → booked).
+            // SaveChanges persists both atomically (and asserts the slot Version token).
             await _trainingSessionRepository.AddAsync(session);
 
             // Side effect only — must not fail the already-committed session creation.
@@ -415,16 +435,31 @@ namespace SporticoApp.Application.Services
                     session.LearnerNote = request.Reason.Trim();
             }
 
-            // Release the booked availability slot in the SAME unit of work as the cancellation
-            // so we never end up with "session cancelled but slot still booked" (or vice versa).
+            // Release a seat on the availability slot in the SAME unit of work as the cancellation
+            // so we never end up with "session cancelled but slot still full" (or vice versa).
             // Both entities are tracked by the one scoped DbContext, so a single SaveChanges is atomic.
             if (session.AvailabilitySlotId.HasValue)
             {
                 var slot = await _availabilityRepository.GetByIdForUpdateAsync(session.AvailabilitySlotId.Value);
-                if (slot != null && slot.Status == CoachAvailabilitySlotStatuses.Booked)
+                if (slot != null
+                    && slot.Status != CoachAvailabilitySlotStatuses.Cancelled
+                    && slot.Status != CoachAvailabilitySlotStatuses.Expired
+                    && slot.StartTime > DateTime.UtcNow)
                 {
-                    slot.Status = CoachAvailabilitySlotStatuses.Available;
-                    slot.UpdatedAt = DateTime.UtcNow;
+                    // Count the OTHER active sessions (this one is still requested/scheduled in the DB
+                    // until the SaveChanges below commits). If a seat opens up, re-open the slot.
+                    var remainingActive = await _trainingSessionRepository.CountActiveByAvailabilitySlotIdAsync(
+                        slot.Id,
+                        TrainingSessionStatuses.CapacityOccupying,
+                        excludeSessionId: session.Id);
+
+                    if (remainingActive < slot.MaxParticipants
+                        && slot.Status != CoachAvailabilitySlotStatuses.Available)
+                    {
+                        slot.Status = CoachAvailabilitySlotStatuses.Available;
+                        slot.UpdatedAt = DateTime.UtcNow;
+                        slot.Version++;
+                    }
                 }
             }
 

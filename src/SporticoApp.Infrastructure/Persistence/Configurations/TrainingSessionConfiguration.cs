@@ -19,12 +19,11 @@ public sealed class TrainingSessionConfiguration : IEntityTypeConfiguration<Trai
         builder.HasIndex(e => new { e.CoachId, e.StartTime, e.EndTime }, "idx_training_sessions_coach_time");
         builder.HasIndex(e => new { e.LearnerId, e.StartTime, e.EndTime }, "idx_training_sessions_learner_time");
 
-        // A single availability slot can back only ONE non-cancelled session. Cancelled (and
-        // missed) sessions release the slot, so they are excluded from the uniqueness filter.
-        // This is the DB-level guard against concurrent double-booking of the same slot.
-        builder.HasIndex(e => e.AvailabilitySlotId, "uq_training_sessions_active_slot")
-            .IsUnique()
-            .HasFilter("availability_slot_id IS NOT NULL AND status IN ('requested', 'scheduled', 'completed')");
+        // Non-unique index for capacity counting (active sessions per availability slot).
+        // The slot can now back up to MaxParticipants active sessions (group slots), so the old
+        // filtered UNIQUE index is replaced. Concurrency is guarded by the slot's optimistic
+        // concurrency token (CoachAvailabilitySlot.Version) instead of a DB uniqueness constraint.
+        builder.HasIndex(e => e.AvailabilitySlotId, "ix_training_sessions_availability_slot_id");
 
         builder.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("now()");

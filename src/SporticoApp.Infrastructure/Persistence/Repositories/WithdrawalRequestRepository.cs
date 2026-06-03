@@ -89,6 +89,23 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return (items, totalCount);
         }
 
+        public async Task<IReadOnlyList<Guid>> GetProcessingPayoutIdsAsync(int batchSize)
+        {
+            if (batchSize <= 0)
+            {
+                return Array.Empty<Guid>();
+            }
+
+            return await _context.WithdrawalRequests
+                .AsNoTracking()
+                .Where(x => x.Status == WithdrawalRequestStatuses.Processing
+                            && x.PayOsPayoutId != null && x.PayOsPayoutId != "")
+                .OrderBy(x => x.ProcessingAt ?? x.UpdatedAt)
+                .Take(batchSize)
+                .Select(x => x.Id)
+                .ToListAsync();
+        }
+
         public async Task AddAsync(WithdrawalRequest request)
         {
             _context.WithdrawalRequests.Add(request);

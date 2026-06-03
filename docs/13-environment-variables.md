@@ -52,6 +52,17 @@ the payout fails loudly with `PAYOS_PAYOUT_FAILED` listing the missing keys (it 
 empty credentials). Auto payout additionally requires a verified coach payout account (`BankBin`,
 `BankAccountNumber`).
 
+## Withdrawal payout reconciliation (background job)
+
+Periodically polls PayOS for `processing` withdrawals and finalizes them to `paid`/`failed`. All keys
+are optional — sensible defaults make it work out of the box.
+
+| Env var | Config key | Default | Notes |
+|---|---|---|---|
+| `WithdrawalPayoutReconciliation__Enabled` | `WithdrawalPayoutReconciliation:Enabled` | `true` | Master switch for the background loop. |
+| `WithdrawalPayoutReconciliation__IntervalSeconds` | `WithdrawalPayoutReconciliation:IntervalSeconds` | `60` | Seconds between passes (min 10). |
+| `WithdrawalPayoutReconciliation__BatchSize` | `WithdrawalPayoutReconciliation:BatchSize` | `20` | Max processing withdrawals reconciled per pass. |
+
 ## Email (registration verification)
 
 | Env var | Config key | Placeholder | Notes |

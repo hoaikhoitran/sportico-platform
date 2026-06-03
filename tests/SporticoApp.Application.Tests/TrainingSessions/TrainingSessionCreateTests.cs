@@ -40,7 +40,9 @@ public class TrainingSessionCreateTests
         Guid? slotCoach = null,
         DateTime? slotStart = null,
         Guid? overlapUserId = null,
-        bool addThrowsConflict = false)
+        bool addThrowsConflict = false,
+        int maxParticipants = 1,
+        int activeSlotCount = 0)
     {
         var booking = new Booking
         {
@@ -58,10 +60,11 @@ public class TrainingSessionCreateTests
             Id = Guid.NewGuid(),
             CoachId = slotCoach ?? Coach,
             Status = slotStatus,
+            MaxParticipants = maxParticipants,
             StartTime = slotStart ?? DateTime.UtcNow.AddDays(1),
             EndTime = (slotStart ?? DateTime.UtcNow.AddDays(1)).AddHours(1)
         };
-        var ts = new FakeTs { UsedCount = usedSessions, OverlapUserId = overlapUserId, AddThrowsConflict = addThrowsConflict };
+        var ts = new FakeTs { UsedCount = usedSessions, OverlapUserId = overlapUserId, AddThrowsConflict = addThrowsConflict, ActiveSlotCount = activeSlotCount };
         var service = new TrainingSessionService(
             new FakeBookings(booking),
             ts,
@@ -96,6 +99,47 @@ public class TrainingSessionCreateTests
         var c = Build(slotStatus: CoachAvailabilitySlotStatuses.Booked);
         var ex = await Assert.ThrowsAsync<ConflictException>(() => c.Service.CreateAsync(Learner, Req(c)));
         Assert.Equal(ErrorCodes.ScheduleConflict, ex.Code);
+    }
+
+    // ── Group-slot capacity ───────────────────────────────────────────────────
+
+    // maxParticipants=2, first booking (0 active): slot STAYS available (a seat remains).
+    [Fact]
+    public async Task Create_GroupSlot_FirstBooking_KeepsAvailable()
+    {
+        var c = Build(maxParticipants: 2, activeSlotCount: 0);
+        var result = await c.Service.CreateAsync(Learner, Req(c));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CoachAvailabilitySlotStatuses.Available, c.Slot.Status); // remaining=1
+    }
+
+    // maxParticipants=2, second booking (1 active): slot becomes booked/full (last seat taken).
+    [Fact]
+    public async Task Create_GroupSlot_LastSeat_MarksBooked()
+    {
+        var c = Build(maxParticipants: 2, activeSlotCount: 1);
+        var result = await c.Service.CreateAsync(Learner, Req(c));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CoachAvailabilitySlotStatuses.Booked, c.Slot.Status); // remaining=0
+    }
+
+    // maxParticipants=2, third booking (2 active): rejected as full.
+    [Fact]
+    public async Task Create_GroupSlot_Full_Throws409()
+    {
+        var c = Build(maxParticipants: 2, activeSlotCount: 2);
+        var ex = await Assert.ThrowsAsync<ConflictException>(() => c.Service.CreateAsync(Learner, Req(c)));
+        Assert.Equal(ErrorCodes.ScheduleConflict, ex.Code);
+    }
+
+    // maxParticipants=1 (default) preserves the original single-booking behaviour.
+    [Fact]
+    public async Task Create_PrivateSlot_BooksAndFills()
+    {
+        var c = Build(maxParticipants: 1, activeSlotCount: 0);
+        var result = await c.Service.CreateAsync(Learner, Req(c));
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CoachAvailabilitySlotStatuses.Booked, c.Slot.Status);
     }
 
     [Fact]
@@ -187,11 +231,16 @@ public class TrainingSessionCreateTests
     private sealed class FakeTs : ITrainingSessionRepository
     {
         public int UsedCount;
+        public int ActiveSlotCount; // active sessions already on the slot (capacity)
         public Guid? OverlapUserId;
         public bool AddThrowsConflict;
         public TrainingSession? Added;
 
         public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(UsedCount);
+        public Task<int> CountActiveByAvailabilitySlotIdAsync(Guid slotId, IEnumerable<string> statuses, Guid? excludeSessionId = null)
+            => Task.FromResult(ActiveSlotCount);
+        public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses)
+            => Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
         public Task<bool> HasOverlapAsync(Guid userId, DateTime s, DateTime e, List<string> st)
             => Task.FromResult(OverlapUserId.HasValue && userId == OverlapUserId.Value);
         public Task AddAsync(TrainingSession session)

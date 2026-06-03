@@ -140,6 +140,37 @@ Use `refresh-payout-status` first to confirm the PayOS result before overriding 
 Blocked if `status = processing` — prevents rejecting while a PayOS payout is in flight.
 Use `refresh-payout-status` to get the current state first.
 
+### refresh-payout-status (manual)
+`PUT /api/admin/withdrawal-requests/{id}/refresh-payout-status`. Requires a `payOsPayoutId`
+(`409` otherwise). Calls PayOS `GET /v1/payouts/{id}`, stores `payOsPayoutStatus`/`payOsRawResponse`,
+then:
+- PayOS **SUCCESS/PAID/COMPLETED** → finalize **paid**: `pendingBalance −= amount`,
+  `totalWithdrawn += amount`, one `withdrawal` debit ledger entry, `paidAt` set, coach notified.
+- PayOS **FAILED/CANCELLED/REJECTED** → **failed**: `pendingBalance → availableBalance`, `failureReason` set.
+- PayOS **PROCESSING/PENDING/unknown** → unchanged (`processing`).
+- Fetch error → unchanged (`processing`); funds are **never** rolled back on an unknown result.
+
+**Response** (`Result<WithdrawalRequestResponse>`): the updated withdrawal (`status`, `paidAt`,
+`failureReason`, `payOsPayoutStatus`, …).
+
+### Automatic reconciliation (background job)
+When PayOS returns **PROCESSING** at approve/retry time, the withdrawal stays `processing`. A
+background worker (`WithdrawalPayoutReconciliationService`) then polls PayOS for each `processing`
+withdrawal that has a `payOsPayoutId` and applies the **same** finalize/rollback logic as the manual
+endpoint above — so a withdrawal eventually becomes `paid` (or `failed`) without an admin clicking
+refresh. It is **idempotent** (already-paid rows are skipped; no duplicate debit) and never rolls
+funds back on a fetch error.
+
+Config (`WithdrawalPayoutReconciliation` section / `WithdrawalPayoutReconciliation__*` env vars):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `Enabled` | `true` | Master switch for the background loop. |
+| `IntervalSeconds` | `60` | Seconds between passes (min 10). |
+| `BatchSize` | `20` | Max processing withdrawals reconciled per pass. |
+
+The manual `refresh-payout-status` endpoint remains available regardless of this setting.
+
 ---
 
 ## Withdrawal status lifecycle

@@ -32,6 +32,11 @@ namespace SporticoApp.Application.Validators.Availability
                 .MaximumLength(2000)
                 .WithMessage("Note is too long")
                 .When(x => !string.IsNullOrWhiteSpace(x.Note));
+
+            RuleFor(x => x.MaxParticipants!.Value)
+                .InclusiveBetween(1, 50)
+                .WithMessage("MaxParticipants must be between 1 and 50")
+                .When(x => x.MaxParticipants.HasValue);
         }
     }
 }

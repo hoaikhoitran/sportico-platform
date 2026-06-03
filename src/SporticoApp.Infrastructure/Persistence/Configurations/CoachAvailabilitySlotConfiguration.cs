@@ -29,6 +29,19 @@ public sealed class CoachAvailabilitySlotConfiguration : IEntityTypeConfiguratio
             .HasMaxLength(20)
             .HasDefaultValueSql("'available'::character varying")
             .HasComment("available | booked | cancelled | expired");
+
+        // Group-slot capacity. Existing rows backfill to 1 (private slot) via the column default.
+        builder.Property(e => e.MaxParticipants)
+            .HasDefaultValue(1)
+            .HasComment("Maximum learners that can book this slot");
+
+        // Optimistic concurrency token (same pattern as CoachWallet.Version): EF adds
+        // `WHERE version = @old` to every UPDATE, so two concurrent bookings of the last seat
+        // cannot both commit.
+        builder.Property(e => e.Version)
+            .IsConcurrencyToken()
+            .HasDefaultValue(0);
+
         builder.Property(e => e.Location).HasMaxLength(255);
         builder.Property(e => e.MeetingUrl).HasMaxLength(1000);
         builder.Property(e => e.Note).HasMaxLength(2000);

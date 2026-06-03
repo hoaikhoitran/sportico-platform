@@ -405,6 +405,107 @@ public class WithdrawalServiceTests
         Assert.Contains("retry", h.PayOs.LastIdempotencyKey!);
     }
 
+    // ── Background reconciliation (ReconcileSingleProcessingPayoutAsync) ──────
+
+    // Processing + PayOS SUCCESS => paid, pending decreased, totalWithdrawn increased, one debit.
+    [Fact]
+    public async Task Reconcile_ProcessingSuccess_FinalizesPaidOnce()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Processing, payoutId: "po_1");
+        var h = Build(available: 400m, pending: 100m, totalWithdrawn: 0m, withdrawal: w);
+        h.PayOs.DetailState = "SUCCESS";
+
+        var handled = await h.Service.ReconcileSingleProcessingPayoutAsync(w.Id);
+
+        Assert.True(handled);
+        Assert.Equal(WithdrawalRequestStatuses.Paid, w.Status);
+        Assert.Equal(0m, h.Wallet.PendingBalance);
+        Assert.Equal(100m, h.Wallet.TotalWithdrawn);
+        Assert.Equal(400m, h.Wallet.AvailableBalance);   // NOT decreased again
+        Assert.Single(h.Wallets.Transactions);
+    }
+
+    // Processing + PayOS PROCESSING => stays processing, no wallet mutation, no ledger.
+    [Fact]
+    public async Task Reconcile_StillProcessing_NoWalletMutation()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Processing, payoutId: "po_1");
+        var h = Build(available: 400m, pending: 100m, withdrawal: w);
+        h.PayOs.DetailState = "PROCESSING";
+
+        var handled = await h.Service.ReconcileSingleProcessingPayoutAsync(w.Id);
+
+        Assert.True(handled);
+        Assert.Equal(WithdrawalRequestStatuses.Processing, w.Status);
+        Assert.Equal(100m, h.Wallet.PendingBalance);
+        Assert.Equal(400m, h.Wallet.AvailableBalance);
+        Assert.Empty(h.Wallets.Transactions);
+    }
+
+    // Processing + PayOS FAILED/CANCELLED => failed, pending returns to available, no ledger.
+    [Theory]
+    [InlineData("FAILED")]
+    [InlineData("CANCELLED")]
+    public async Task Reconcile_Terminal_RollsBackToAvailable(string state)
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Processing, payoutId: "po_1");
+        var h = Build(available: 400m, pending: 100m, withdrawal: w);
+        h.PayOs.DetailState = state;
+
+        var handled = await h.Service.ReconcileSingleProcessingPayoutAsync(w.Id);
+
+        Assert.True(handled);
+        Assert.Equal(WithdrawalRequestStatuses.Failed, w.Status);
+        Assert.Equal(500m, h.Wallet.AvailableBalance);
+        Assert.Equal(0m, h.Wallet.PendingBalance);
+        Assert.Empty(h.Wallets.Transactions);
+    }
+
+    // Already paid => idempotent no-op: PayOS not even called, no duplicate debit.
+    [Fact]
+    public async Task Reconcile_AlreadyPaid_IsNoOp_NoDuplicateDebit()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Paid, payoutId: "po_1");
+        var h = Build(available: 400m, pending: 0m, totalWithdrawn: 100m, withdrawal: w);
+
+        var handled = await h.Service.ReconcileSingleProcessingPayoutAsync(w.Id);
+
+        Assert.False(handled);                 // skipped (not processing)
+        Assert.Equal(0, h.PayOs.DetailCallCount);
+        Assert.Equal(WithdrawalRequestStatuses.Paid, w.Status);
+        Assert.Empty(h.Wallets.Transactions);  // no new debit
+    }
+
+    // PayOS detail fetch failure => stays processing, funds NOT rolled back.
+    [Fact]
+    public async Task Reconcile_FetchFailure_DoesNotRollBack()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Processing, payoutId: "po_1");
+        var h = Build(available: 400m, pending: 100m, withdrawal: w);
+        h.PayOs.DetailThrows = true;
+
+        var handled = await h.Service.ReconcileSingleProcessingPayoutAsync(w.Id);
+
+        Assert.True(handled);
+        Assert.Equal(WithdrawalRequestStatuses.Processing, w.Status); // unchanged
+        Assert.Equal(100m, h.Wallet.PendingBalance);                  // funds still reserved
+        Assert.Equal(400m, h.Wallet.AvailableBalance);
+        Assert.Empty(h.Wallets.Transactions);
+    }
+
+    // No payout id => skipped (never happens via the batch query, but guard it anyway).
+    [Fact]
+    public async Task Reconcile_ProcessingWithoutPayoutId_IsSkipped()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Processing, payoutId: null);
+        var h = Build(available: 400m, pending: 100m, withdrawal: w);
+
+        var handled = await h.Service.ReconcileSingleProcessingPayoutAsync(w.Id);
+
+        Assert.False(handled);
+        Assert.Equal(0, h.PayOs.DetailCallCount);
+    }
+
     // 12. Admin GetAll can filter by every status.
     [Theory]
     [InlineData(WithdrawalRequestStatuses.Pending, 1)]
@@ -523,6 +624,18 @@ public class WithdrawalServiceTests
         public Task<(List<WithdrawalRequest> Items, int TotalCount)> GetPagedAsync(WithdrawalRequestFilterRequest filter)
             => Page(_all, filter);
 
+        public Task<IReadOnlyList<Guid>> GetProcessingPayoutIdsAsync(int batchSize)
+        {
+            var ids = _all
+                .Concat(_single is null ? Enumerable.Empty<WithdrawalRequest>() : new[] { _single })
+                .Where(x => x.Status == WithdrawalRequestStatuses.Processing
+                            && !string.IsNullOrWhiteSpace(x.PayOsPayoutId))
+                .Select(x => x.Id)
+                .Take(batchSize)
+                .ToList();
+            return Task.FromResult<IReadOnlyList<Guid>>(ids);
+        }
+
         private static Task<(List<WithdrawalRequest> Items, int TotalCount)> Page(
             IEnumerable<WithdrawalRequest> source, WithdrawalRequestFilterRequest filter)
         {
@@ -567,6 +680,8 @@ public class WithdrawalServiceTests
         public string? LastIdempotencyKey;
         public PayOsCreatePayoutRequest? LastRequest;
         public int CreateCallCount;
+        public int DetailCallCount;
+        public bool DetailThrows;
 
         public Task<PayOsPayoutBalanceResponse> GetBalanceAsync() => throw new NotImplementedException();
 
@@ -585,12 +700,18 @@ public class WithdrawalServiceTests
         }
 
         public Task<PayOsPayoutDetailResponse> GetPayoutDetailAsync(string payoutId)
-            => Task.FromResult(new PayOsPayoutDetailResponse
+        {
+            DetailCallCount++;
+            if (DetailThrows)
+                throw new HttpRequestException("PayOS unreachable");
+
+            return Task.FromResult(new PayOsPayoutDetailResponse
             {
                 Code = "00",
                 Desc = "ok",
                 Data = new PayOsPayoutData { Id = payoutId, State = DetailState },
                 RawJson = "{}"
             });
+        }
     }
 }

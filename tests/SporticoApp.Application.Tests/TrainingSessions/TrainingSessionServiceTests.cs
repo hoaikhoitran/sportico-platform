@@ -113,6 +113,35 @@ public class TrainingSessionServiceTests
         Assert.Equal(CoachAvailabilitySlotStatuses.Available, slot.Status); // slot released
     }
 
+    // Cancel on a full group slot frees one seat → slot re-opens to available.
+    [Fact]
+    public async Task Cancel_GroupSlot_ReleasesSeat_ReopensSlot()
+    {
+        var session = Session(TrainingSessionStatuses.Scheduled);
+        var slot = new CoachAvailabilitySlot
+        {
+            Id = Guid.NewGuid(),
+            CoachId = CoachId,
+            Status = CoachAvailabilitySlotStatuses.Booked, // was full (3/3)
+            MaxParticipants = 3,
+            StartTime = DateTime.UtcNow.AddDays(1),        // future
+            EndTime = DateTime.UtcNow.AddDays(1).AddHours(1)
+        };
+        session.StartTime = slot.StartTime;
+        session.EndTime = slot.EndTime;
+        session.AvailabilitySlotId = slot.Id;
+
+        // Two OTHER active sessions remain after this one is cancelled (2 < 3 → reopen).
+        var ts = new FakeTsRepo { Session = session, ActiveSlotCount = 2 };
+        var avail = new FakeAvailRepo { Slot = slot };
+        var service = Build(ts, new FakeNotifRepo(), avail);
+
+        var result = await service.CancelAsync(CoachId, session.Id, new CancelTrainingSessionRequest());
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(CoachAvailabilitySlotStatuses.Available, slot.Status);
+    }
+
     // Complete: second call returns 409 and does NOT credit the wallet again.
     [Fact]
     public async Task Complete_SecondCall_ReturnsConflict_NoDoubleCredit()
@@ -200,12 +229,17 @@ public class TrainingSessionServiceTests
     {
         public TrainingSession? Session;
         public int SaveCount;
+        public int ActiveSlotCount; // OTHER active sessions on the slot (capacity)
 
         public Task<TrainingSession?> GetByIdForUpdateAsync(Guid id)
             => Task.FromResult(Session != null && Session.Id == id ? Session : null);
         public Task SaveChangesAsync() { SaveCount++; return Task.CompletedTask; }
         public Task AddAsync(TrainingSession session) { Session ??= session; SaveCount++; return Task.CompletedTask; }
         public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(0);
+        public Task<int> CountActiveByAvailabilitySlotIdAsync(Guid slotId, IEnumerable<string> statuses, Guid? excludeSessionId = null)
+            => Task.FromResult(ActiveSlotCount);
+        public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses)
+            => Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
         public Task<bool> HasOverlapAsync(Guid userId, DateTime s, DateTime e, List<string> st) => Task.FromResult(false);
 
         public Task<TrainingSession?> GetByIdAsync(Guid id) => throw new NotImplementedException();
