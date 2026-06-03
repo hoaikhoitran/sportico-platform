@@ -81,7 +81,8 @@ public class WithdrawalServiceTests
             payos,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<WithdrawalService>.Instance,
             Microsoft.Extensions.Options.Options.Create(
-                new PayoutOptions { AutoPayoutEnabled = autoPayout, PayoutCategory = "salary" }),
+                new PayoutOptions { AutoPayoutEnabled = autoPayout }),
+                // PayoutCategory is intentionally left null — category must not be defaulted to "salary"
             new PassValidator<CreateWithdrawalRequest>(),
             new PassValidator<WithdrawalRequestFilterRequest>(),
             new PassValidator<RejectWithdrawalRequest>());
@@ -210,8 +211,8 @@ public class WithdrawalServiceTests
     }
 
     // Auto mode: the PayOS payout request carries the exact contract fields the spec mandates —
-    // integer VND amount, withdrawal id as referenceId, fixed description, destination bank, and
-    // configured category.
+    // integer VND amount, withdrawal id as referenceId, fixed description, destination bank fields,
+    // account holder name (toAccountName), and no category when none is configured.
     [Fact]
     public async Task Approve_AutoMode_SendsExactPayoutContractFields()
     {
@@ -228,7 +229,8 @@ public class WithdrawalServiceTests
         Assert.Equal("SPORTICO WD", req.Description);
         Assert.Equal("970418", req.ToBin);
         Assert.Equal("0123456789", req.ToAccountNumber);
-        Assert.Equal("salary", req.Category);
+        Assert.Equal("COACH NAME", req.ToAccountName);       // from BankAccountHolder
+        Assert.Null(req.Category);                           // omitted — no default "salary"
     }
 
     // Auto mode: fractional VND is rounded to a whole integer (VND has no minor units) rather than

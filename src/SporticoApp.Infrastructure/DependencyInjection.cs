@@ -103,12 +103,14 @@ namespace SporticoApp.Infrastructure
                     payout.GetValue<bool?>("AutoPayoutEnabled")
                     ?? payin.GetValue<bool>("AutoPayoutEnabled");
 
+                // Category is intentionally nullable — omit from the PayOS body entirely when not set.
+                // Never fall back to "salary"; PayOS rejects categories the merchant account did not configure.
                 var category = payout.GetValue<string?>("PayoutCategory");
                 if (string.IsNullOrWhiteSpace(category))
                 {
                     category = payin.GetValue<string?>("PayoutCategory");
                 }
-                options.PayoutCategory = string.IsNullOrWhiteSpace(category) ? "salary" : category;
+                options.PayoutCategory = string.IsNullOrWhiteSpace(category) ? null : category;
             });
 
             // Backend feature flags (e.g. dev/test manual purchase). Defaults to all-off

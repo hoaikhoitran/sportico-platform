@@ -25,7 +25,10 @@ namespace SporticoApp.Infrastructure.Services.Payments
         /// </summary>
         public bool AutoPayoutEnabled { get; set; } = false;
 
-        /// <summary>Default PayOS payout category (e.g. "salary", "business").</summary>
-        public string PayoutCategory { get; set; } = "salary";
+        /// <summary>
+        /// Optional PayOS payout category (e.g. "salary", "business").
+        /// Leave null/empty to omit category from the request body entirely.
+        /// </summary>
+        public string? PayoutCategory { get; set; }
     }
 }

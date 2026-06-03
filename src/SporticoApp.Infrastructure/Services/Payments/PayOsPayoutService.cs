@@ -100,7 +100,8 @@ namespace SporticoApp.Infrastructure.Services.Payments
             ValidatePayoutSettings();
             ValidatePayoutRequest(request);
 
-            // Canonical string covers the five core fields only (category is excluded per spec).
+            // Canonical string covers the five core payout fields only.
+            // toAccountName and category are deliberately excluded per PayOS Chi spec.
             var canonicalString = PayOsPayoutSigner.BuildCanonicalString(
                 request.Amount,
                 request.Description,
@@ -122,10 +123,36 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 ["signature"] = signature
             };
 
+            // toAccountName is required by PayOS Chi to verify the destination account.
+            // It is NOT part of the HMAC canonical string.
+            if (!string.IsNullOrWhiteSpace(request.ToAccountName))
+            {
+                body["toAccountName"] = request.ToAccountName;
+            }
+
+            // category is optional and merchant-account-specific.
+            // Omit entirely when not configured — an unrecognised value causes PayOS to reject.
             if (!string.IsNullOrWhiteSpace(request.Category))
             {
                 body["category"] = request.Category;
             }
+
+            // Pre-send diagnostics: enough to diagnose PayOS rejections without exposing secrets.
+            // ClientId, ApiKey, ChecksumKey, and the signature value are never logged.
+            _logger.LogInformation(
+                "PayOS Chi pre-send: referenceId={ReferenceId} amount={Amount} " +
+                "description={Description} toBin={ToBin} maskedAccount={MaskedAccount} " +
+                "toAccountNameIncluded={ToAccountNameIncluded} categoryIncluded={CategoryIncluded} " +
+                "category={Category} bodyFields=[{BodyFields}]",
+                request.ReferenceId,
+                request.Amount,
+                request.Description,
+                request.ToBin,
+                MaskAccountNumber(request.ToAccountNumber),
+                body.ContainsKey("toAccountName"),
+                body.ContainsKey("category"),
+                request.Category,
+                string.Join(", ", body.Keys));
 
             using var httpRequest = new HttpRequestMessage(
                 HttpMethod.Post,
@@ -137,13 +164,6 @@ namespace SporticoApp.Infrastructure.Services.Payments
             var response = await _httpClient.SendAsync(httpRequest);
             var rawJson = await response.Content.ReadAsStringAsync();
 
-            // Log enough for reconciliation without exposing secrets.
-            _logger.LogInformation(
-                "PayOS create payout: referenceId={ReferenceId} amount={Amount} status={StatusCode}",
-                request.ReferenceId,
-                request.Amount,
-                (int)response.StatusCode);
-
             using var document = JsonDocument.Parse(rawJson);
             var root = document.RootElement;
 
@@ -154,6 +174,18 @@ namespace SporticoApp.Infrastructure.Services.Payments
             var desc = root.TryGetProperty("desc", out var descProp)
                 ? descProp.GetString() ?? string.Empty
                 : string.Empty;
+
+            // Post-response diagnostics: log code + desc so rejections are visible in logs.
+            // rawJson is also logged — it contains no credentials (only payout metadata).
+            _logger.LogInformation(
+                "PayOS Chi response: referenceId={ReferenceId} amount={Amount} " +
+                "httpStatus={HttpStatus} payosCode={PayOsCode} payosDesc={PayOsDesc} rawResponse={RawResponse}",
+                request.ReferenceId,
+                request.Amount,
+                (int)response.StatusCode,
+                code,
+                desc,
+                rawJson);
 
             PayOsPayoutData? payoutData = null;
 
@@ -214,6 +246,17 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 Data = payoutData,
                 RawJson = rawJson
             };
+        }
+
+        /// <summary>Returns a masked account number safe to write to logs, e.g. "01****89".</summary>
+        private static string MaskAccountNumber(string? accountNumber)
+        {
+            if (string.IsNullOrWhiteSpace(accountNumber) || accountNumber.Length <= 4)
+                return "****";
+
+            return accountNumber[..2]
+                + new string('*', accountNumber.Length - 4)
+                + accountNumber[^2..];
         }
 
         private void AddAuthHeaders(HttpRequestMessage request, string? idempotencyKey)

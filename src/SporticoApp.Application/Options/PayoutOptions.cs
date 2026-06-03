@@ -12,7 +12,13 @@ namespace SporticoApp.Application.Options
         /// </summary>
         public bool AutoPayoutEnabled { get; set; } = false;
 
-        /// <summary>PayOS payout category (e.g. "salary").</summary>
-        public string PayoutCategory { get; set; } = "salary";
+        /// <summary>
+        /// PayOS payout category sent with Chi payouts.
+        /// Null/empty means category is omitted from the request body entirely.
+        /// Only set this when the PayOS merchant account requires a specific category.
+        /// Do not default to "salary" — PayOS rejects unrecognised category values.
+        /// Configure via PayOsPayout__PayoutCategory (env) when needed.
+        /// </summary>
+        public string? PayoutCategory { get; set; }
     }
 }

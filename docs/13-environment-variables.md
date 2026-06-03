@@ -45,7 +45,7 @@ credentials are kept separate from the inbound payment-link channel above — Pa
 | `PayOsPayout__ChecksumKey` | `PayOsPayout:ChecksumKey` | `<payout-checksum-key>` | HMAC key for payout request signatures. |
 | `PayOsPayout__BaseUrl` | `PayOsPayout:BaseUrl` | `https://api-merchant.payos.vn` | Payout API base (falls back to `PayOs__BaseUrl`, then the PayOS default). |
 | `PayOsPayout__AutoPayoutEnabled` | `PayOsPayout:AutoPayoutEnabled` | `false` | **Withdrawal payout mode.** `false` (default) = manual: admin approves, transfers externally, then marks paid. `true` = admin **approval** triggers an automatic PayOS Chi payout. Coach withdrawal requests never send money in either mode. Set `PayOsPayout__AutoPayoutEnabled=true` in production to enable automatic payouts. |
-| `PayOsPayout__PayoutCategory` | `PayOsPayout:PayoutCategory` | `salary` | PayOS payout category sent with Chi payouts (auto mode only). |
+| `PayOsPayout__PayoutCategory` | `PayOsPayout:PayoutCategory` | *(empty)* | **Optional.** PayOS payout category (e.g. `salary`, `business`). Leave unset to omit `category` from the request body entirely — PayOS rejects unrecognised category values, so only set this when your PayOS Chi merchant account explicitly requires it. |
 
 When auto mode is on and a payout is attempted with any of `ClientId` / `ApiKey` / `ChecksumKey` blank,
 the payout fails loudly with `PAYOS_PAYOUT_FAILED` listing the missing keys (it never calls PayOS with

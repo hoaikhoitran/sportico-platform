@@ -33,7 +33,7 @@ namespace SporticoApp.Application.Services
         // Injected from PayOsSettings.AutoPayoutEnabled via the caller.
         // Stored as a field so it can be toggled via configuration without redeployment.
         private readonly bool _autoPayoutEnabled;
-        private readonly string _payoutCategory;
+        private readonly string? _payoutCategory;
 
         // Status values accepted by the admin "all withdrawals" status filter.
         private static readonly HashSet<string> WithdrawalStatusFilters = new(StringComparer.OrdinalIgnoreCase)
@@ -687,6 +687,10 @@ namespace SporticoApp.Application.Services
                         Description = "SPORTICO WD",
                         ToBin = payoutAccount.BankBin,
                         ToAccountNumber = payoutAccount.BankAccountNumber,
+                        // PayOS Chi requires the account holder name to verify the destination account.
+                        // Sourced from the coach's verified payout account registration.
+                        ToAccountName = payoutAccount.BankAccountHolder,
+                        // Category is optional; null means it is omitted from the PayOS body entirely.
                         Category = _payoutCategory
                     },
                     idempotencyKey: key);
