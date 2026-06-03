@@ -130,13 +130,25 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 body["category"] = new[] { request.Category };
             }
 
-            // Pre-send diagnostics — enough to diagnose PayOS rejections without exposing secrets.
-            // ClientId, ApiKey, ChecksumKey, and the signature value are never logged.
+            // Safe canonical string for logging — account number masked.
+            // The canonical string itself is not a secret (HMAC is one-way),
+            // but we mask the account to avoid accidental exposure in log aggregators.
+            var safeCanonical = canonicalString.Replace(
+                $"toAccountNumber={request.ToAccountNumber}",
+                $"toAccountNumber={MaskAccountNumber(request.ToAccountNumber)}");
+
+            // Pre-send diagnostics — enough to diagnose signature/schema rejections.
+            // ClientId, ApiKey, ChecksumKey, and the raw signature value are NEVER logged.
             _logger.LogInformation(
                 "PayOS Chi pre-send: referenceId={ReferenceId} amount={Amount} " +
                 "description={Description} toBin={ToBin} maskedAccount={MaskedAccount} " +
                 "categoryIncluded={CategoryIncluded} category={Category} " +
-                "signatureLocation=header bodyFields=[{BodyFields}]",
+                "signatureLocation=header bodyFields=[{BodyFields}] " +
+                "canonicalFields=[amount,description,referenceId,toAccountNumber,toBin] " +
+                "canonicalStringSafe={CanonicalStringSafe} " +
+                "signatureLength={SignatureLength} " +
+                "checksumKeyPresent={ChecksumKeyPresent} checksumKeyLength={ChecksumKeyLength} " +
+                "idempotencyKey={IdempotencyKey} referenceIdEqualsIdempotencyKey={RefEqualsKey}",
                 request.ReferenceId,
                 request.Amount,
                 request.Description,
@@ -144,7 +156,13 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 MaskAccountNumber(request.ToAccountNumber),
                 body.ContainsKey("category"),
                 request.Category,
-                string.Join(", ", body.Keys));
+                string.Join(", ", body.Keys),
+                safeCanonical,
+                signature.Length,
+                !string.IsNullOrEmpty(_settings.ChecksumKey),
+                _settings.ChecksumKey?.Length ?? 0,
+                idempotencyKey,
+                request.ReferenceId == idempotencyKey);
 
             using var httpRequest = new HttpRequestMessage(
                 HttpMethod.Post,
