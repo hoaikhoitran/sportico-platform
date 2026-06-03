@@ -968,5 +968,100 @@ namespace SporticoApp.Application.Services
                 AdminNote = withdrawal.AdminNote
             };
         }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Admin diagnostic: payout account health check for PayOS rejections
+        // ─────────────────────────────────────────────────────────────────────
+        public async Task<Result<PayoutAccountDebugResponse>> GetPayoutAccountDebugAsync(Guid id)
+        {
+            var withdrawal = await _withdrawalRepository.GetByIdAsync(id);
+            if (withdrawal == null)
+            {
+                throw new NotFoundException(
+                    ErrorCodes.WithdrawalRequestNotFound,
+                    "Withdrawal request not found");
+            }
+
+            CoachPayoutAccount? account = null;
+            if (withdrawal.CoachPayoutAccountId.HasValue)
+            {
+                account = await _payoutAccountRepository.GetByIdAsync(
+                    withdrawal.CoachPayoutAccountId.Value);
+            }
+
+            if (account == null)
+            {
+                return Result<PayoutAccountDebugResponse>.Success(new PayoutAccountDebugResponse
+                {
+                    WithdrawalId = id,
+                    PayoutAccountId = null,
+                    WithdrawalAmount = withdrawal.Amount,
+                    WithdrawalStatus = withdrawal.Status,
+                    FailureReason = withdrawal.FailureReason
+                });
+            }
+
+            var rawHolder = account.BankAccountHolder;
+            var normalizedHolder = NormalizeAccountNameForDebug(rawHolder);
+            var binValid = !string.IsNullOrWhiteSpace(account.BankBin)
+                && account.BankBin.Length == 6
+                && account.BankBin.All(char.IsAsciiDigit);
+            var accountNumber = account.BankAccountNumber?.Trim() ?? string.Empty;
+            var digitsOnly = accountNumber.All(char.IsAsciiDigit);
+            var hadDiacriticsOrNonAscii = normalizedHolder != null
+                && rawHolder != null
+                && normalizedHolder != rawHolder.Trim().ToUpperInvariant();
+
+            return Result<PayoutAccountDebugResponse>.Success(new PayoutAccountDebugResponse
+            {
+                WithdrawalId = id,
+                PayoutAccountId = account.Id,
+                BankName = account.BankName,
+                BankBin = account.BankBin,
+                BankBinValid = binValid,
+                MaskedAccountNumber = WithdrawalMappingExtensions.MaskAccountNumber(account.BankAccountNumber ?? string.Empty),
+                AccountNumberLength = accountNumber.Length,
+                AccountNumberDigitsOnly = digitsOnly,
+                RawAccountHolder = rawHolder,
+                NormalizedAccountHolder = normalizedHolder,
+                RawAccountHolderLength = rawHolder?.Length ?? 0,
+                NormalizedAccountHolderLength = normalizedHolder?.Length ?? 0,
+                HadDiacriticsOrNonAscii = hadDiacriticsOrNonAscii,
+                WithdrawalAmount = withdrawal.Amount,
+                WithdrawalStatus = withdrawal.Status,
+                FailureReason = withdrawal.FailureReason
+            });
+        }
+
+        /// <summary>
+        /// Inline normalisation mirror of <c>PayOsPayoutSigner.NormalizeAccountName</c>
+        /// (in Infrastructure). Kept here so the Application layer can compute diagnostics
+        /// without a dependency on Infrastructure.
+        /// </summary>
+        private static string? NormalizeAccountNameForDebug(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return null;
+
+            var preprocessed = name.Replace("Đ", "D").Replace("đ", "d");
+            var decomposed = preprocessed.Normalize(System.Text.NormalizationForm.FormD);
+            var sb = new System.Text.StringBuilder(decomposed.Length);
+            foreach (var c in decomposed)
+            {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) ==
+                    System.Globalization.UnicodeCategory.NonSpacingMark)
+                    continue;
+                if (char.IsWhiteSpace(c))
+                {
+                    if (sb.Length > 0 && sb[^1] != ' ')
+                        sb.Append(' ');
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            var result = sb.ToString().Trim().ToUpperInvariant();
+            return result.Length == 0 ? null : result;
+        }
     }
 }

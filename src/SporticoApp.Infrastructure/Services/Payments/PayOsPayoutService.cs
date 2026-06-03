@@ -100,12 +100,19 @@ namespace SporticoApp.Infrastructure.Services.Payments
             ValidatePayoutSettings();
             ValidatePayoutRequest(request);
 
-            // Canonical string covers the five core payout fields only.
-            // toAccountName and category are deliberately excluded per PayOS Chi spec.
+            // Normalise account holder name before signing and before including in body.
+            // PayOS validates toAccountName against the bank's record, which stores names in
+            // uppercase Latin (as they appear on the card / in bank inquiry responses).
+            // Vietnamese diacritics must be stripped: "Nguyễn Văn A" → "NGUYEN VAN A".
+            var normalizedAccountName = PayOsPayoutSigner.NormalizeAccountName(request.ToAccountName);
+
+            // Canonical string: amount, description, referenceId, toAccountName (when present),
+            // toAccountNumber, toBin — sorted alphabetically (Ordinal). category is excluded.
             var canonicalString = PayOsPayoutSigner.BuildCanonicalString(
                 request.Amount,
                 request.Description,
                 request.ReferenceId,
+                normalizedAccountName,
                 request.ToAccountNumber,
                 request.ToBin);
 
@@ -123,11 +130,10 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 ["signature"] = signature
             };
 
-            // toAccountName is required by PayOS Chi to verify the destination account.
-            // It is NOT part of the HMAC canonical string.
-            if (!string.IsNullOrWhiteSpace(request.ToAccountName))
+            // toAccountName: send the normalised form — the same value that was signed.
+            if (!string.IsNullOrEmpty(normalizedAccountName))
             {
-                body["toAccountName"] = request.ToAccountName;
+                body["toAccountName"] = normalizedAccountName;
             }
 
             // category is optional and merchant-account-specific.
@@ -137,19 +143,25 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 body["category"] = request.Category;
             }
 
-            // Pre-send diagnostics: enough to diagnose PayOS rejections without exposing secrets.
-            // ClientId, ApiKey, ChecksumKey, and the signature value are never logged.
+            // Pre-send diagnostics — enough to diagnose PayOS rejections without exposing secrets.
+            // ClientId, ApiKey, ChecksumKey, and the raw signature value are never logged.
             _logger.LogInformation(
                 "PayOS Chi pre-send: referenceId={ReferenceId} amount={Amount} " +
                 "description={Description} toBin={ToBin} maskedAccount={MaskedAccount} " +
-                "toAccountNameIncluded={ToAccountNameIncluded} categoryIncluded={CategoryIncluded} " +
-                "category={Category} bodyFields=[{BodyFields}]",
+                "toAccountNameIncluded={ToAccountNameIncluded} " +
+                "rawAccountHolder={RawAccountHolder} normalizedAccountHolder={NormalizedAccountHolder} " +
+                "accountHolderLength={AccountHolderLength} " +
+                "categoryIncluded={CategoryIncluded} category={Category} " +
+                "bodyFields=[{BodyFields}]",
                 request.ReferenceId,
                 request.Amount,
                 request.Description,
                 request.ToBin,
                 MaskAccountNumber(request.ToAccountNumber),
                 body.ContainsKey("toAccountName"),
+                request.ToAccountName,       // raw (not a secret — it's the holder name, not a credential)
+                normalizedAccountName,
+                normalizedAccountName?.Length ?? 0,
                 body.ContainsKey("category"),
                 request.Category,
                 string.Join(", ", body.Keys));
@@ -348,24 +360,35 @@ namespace SporticoApp.Infrastructure.Services.Payments
             var details = new List<string>();
 
             if (request.Amount <= 0)
-            {
                 details.Add("Amount must be greater than zero");
-            }
 
             if (string.IsNullOrWhiteSpace(request.ReferenceId))
-            {
                 details.Add("ReferenceId is required");
-            }
 
+            // PayOS Chi requires an exact 6-digit bank BIN (no spaces, no dashes).
             if (string.IsNullOrWhiteSpace(request.ToBin))
             {
                 details.Add("ToBin is required");
             }
+            else if (request.ToBin.Length != 6 || !request.ToBin.All(char.IsAsciiDigit))
+            {
+                details.Add($"ToBin must be exactly 6 ASCII digits (got '{request.ToBin}')");
+            }
 
+            // Bank account numbers in Vietnam are digits only; no hyphens or spaces allowed.
             if (string.IsNullOrWhiteSpace(request.ToAccountNumber))
             {
                 details.Add("ToAccountNumber is required");
             }
+            else if (!request.ToAccountNumber.Trim().All(char.IsAsciiDigit))
+            {
+                details.Add($"ToAccountNumber must contain digits only (got length={request.ToAccountNumber.Length})");
+            }
+
+            // Account holder name is required and must be non-empty after normalisation.
+            var normalizedHolder = PayOsPayoutSigner.NormalizeAccountName(request.ToAccountName);
+            if (string.IsNullOrEmpty(normalizedHolder))
+                details.Add("ToAccountName (BankAccountHolder) is required and must be non-empty after normalisation");
 
             if (details.Count > 0)
             {
