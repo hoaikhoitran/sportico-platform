@@ -100,20 +100,9 @@ namespace SporticoApp.Infrastructure.Services.Payments
             ValidatePayoutSettings();
             ValidatePayoutRequest(request);
 
-            // Canonical string: exactly five fields sorted alphabetically (Ordinal).
-            // toAccountName is a response-only field — not a request field, not signed.
-            // category is excluded from the canonical string.
-            var canonicalString = PayOsPayoutSigner.BuildCanonicalString(
-                request.Amount,
-                request.Description,
-                request.ReferenceId,
-                request.ToAccountNumber,
-                request.ToBin);
-
-            // PayOS Chi API: signature is sent as the x-signature HTTP request header,
-            // NOT as a field in the JSON request body.
-            var signature = PayOsPayoutSigner.Compute(canonicalString, _settings.ChecksumKey);
-
+            // Build the EXACT request body first. The signature is computed over this same body
+            // (deep-sorted, URL-encoded, arrays JSON-stringified) — matching the official PayOS
+            // payout SDK (payos-payout-demo-nodejs/lib/signature.js). See docs/payos-evidence/.
             var body = new Dictionary<string, object?>
             {
                 ["referenceId"]     = request.ReferenceId,
@@ -124,18 +113,23 @@ namespace SporticoApp.Infrastructure.Services.Payments
             };
 
             // category is optional, merchant-account-specific, and sent as a string array per
-            // PayOS Chi API spec. Omit entirely when not configured.
+            // PayOS Chi API spec. Omit entirely when not configured. When present it is part of
+            // the body AND therefore part of the signature.
             if (!string.IsNullOrWhiteSpace(request.Category))
             {
                 body["category"] = new[] { request.Category };
             }
 
-            // Safe canonical string for logging — account number masked.
-            // The canonical string itself is not a secret (HMAC is one-way),
-            // but we mask the account to avoid accidental exposure in log aggregators.
+            // PayOS Chi API: signature is HMAC-SHA256 over the URL-encoded, deep-sorted body and is
+            // sent as the x-signature HTTP request header, NOT as a field in the JSON request body.
+            var canonicalString = PayOsPayoutSigner.BuildCanonicalString(body);
+            var signature       = PayOsPayoutSigner.Compute(canonicalString, _settings.ChecksumKey);
+
+            // Safe canonical string for logging — account number masked. The canonical string is not
+            // a secret (HMAC is one-way), but we mask the account to avoid exposure in log aggregators.
             var safeCanonical = canonicalString.Replace(
-                $"toAccountNumber={request.ToAccountNumber}",
-                $"toAccountNumber={MaskAccountNumber(request.ToAccountNumber)}");
+                request.ToAccountNumber,
+                MaskAccountNumber(request.ToAccountNumber));
 
             // Pre-send diagnostics — enough to diagnose signature/schema rejections.
             // ClientId, ApiKey, ChecksumKey, and the raw signature value are NEVER logged.
@@ -143,8 +137,7 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 "PayOS Chi pre-send: referenceId={ReferenceId} amount={Amount} " +
                 "description={Description} toBin={ToBin} maskedAccount={MaskedAccount} " +
                 "categoryIncluded={CategoryIncluded} category={Category} " +
-                "signatureLocation=header bodyFields=[{BodyFields}] " +
-                "canonicalFields=[amount,description,referenceId,toAccountNumber,toBin] " +
+                "signatureLocation=header signatureScheme=encodeURIComponent bodyFields=[{BodyFields}] " +
                 "canonicalStringSafe={CanonicalStringSafe} " +
                 "signatureLength={SignatureLength} " +
                 "checksumKeyPresent={ChecksumKeyPresent} checksumKeyLength={ChecksumKeyLength} " +
