@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using SporticoApp.Application.DTOs.Users;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Core.Entities;
 using SporticoApp.Infrastructure.Persistence;
@@ -90,6 +91,65 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             return await _context.Users
                 .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
+        // ── Admin user management ────────────────────────────────────────────
+
+        public async Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedForAdminAsync(
+            AdminUserFilterRequest filter)
+        {
+            IQueryable<User> query = _context.Users.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(filter.Search))
+            {
+                var pattern = $"%{filter.Search.Trim()}%";
+                query = query.Where(u =>
+                    EF.Functions.ILike(u.Email, pattern) ||
+                    EF.Functions.ILike(u.FullName, pattern) ||
+                    (u.Phone != null && EF.Functions.ILike(u.Phone, pattern)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.Role))
+            {
+                var role = filter.Role.Trim().ToLower();
+                query = query.Where(u => u.UserRoles.Any(ur => ur.Role.Name.ToLower() == role));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+            {
+                var status = filter.Status.Trim().ToLower();
+                query = query.Where(u => u.Status.ToLower() == status);
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var items = await query
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .Include(u => u.CoachProfile)
+                .Include(u => u.LearnerProfile)
+                .OrderByDescending(u => u.CreatedAt)
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
+        public async Task<User?> GetByIdForAdminUpdateAsync(Guid id)
+        {
+            // Tracked (no AsNoTracking) so role replacement and field updates persist.
+            return await _context.Users
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
+        public async Task<bool> ExistsByEmailAsync(string email)
+        {
+            return await _context.Users
+                .AsNoTracking()
+                .AnyAsync(u => u.Email == email);
         }
     }
 }

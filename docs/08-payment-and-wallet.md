@@ -79,14 +79,22 @@ Query via `GET /api/coaches/me/wallet/transactions` (paged).
 
 ## Withdrawal Flow
 
-State machine for `WithdrawalRequest.Status`: `pending → approved → paid`, or `pending → rejected`.
+Two modes, selected by `PayOs:AutoPayoutEnabled`. **Creation never sends money in either mode** — it
+only reserves funds. The PayOS payout (auto mode) is triggered by **admin approval**.
+
+State machine for `WithdrawalRequest.Status`:
+- Manual mode (`AutoPayoutEnabled=false`): `pending → approved → paid`, or `pending → rejected`.
+- Auto mode (`AutoPayoutEnabled=true`): `pending → processing → paid`, or `processing → failed → (retry) → processing`, or `pending → rejected`.
 
 | Action | Endpoint | Wallet effect |
 |---|---|---|
-| Create | `POST /api/coaches/me/withdrawal-requests` | `Available -= amount`, `Pending += amount` |
-| Approve | `PUT /api/admin/withdrawal-requests/{id}/approve` | none (status only) |
-| Mark paid | `PUT /api/admin/withdrawal-requests/{id}/mark-paid` | `Pending -= amount`, `TotalWithdrawn += amount`, ledger debit |
-| Reject | `PUT /api/admin/withdrawal-requests/{id}/reject` | `Pending -= amount`, `Available += amount` |
+| Create | `POST /api/coaches/me/withdrawal-requests` | `Available -= amount`, `Pending += amount`; status `pending`; **no PayOS call** |
+| Approve (manual) | `PUT /api/admin/withdrawal-requests/{id}/approve` | none (status → `approved`) |
+| Approve (auto) | `PUT /api/admin/withdrawal-requests/{id}/approve` | status → `processing`; PayOS payout initiated (key = `withdrawal.Id`). SUCCESS → paid (`Pending -= amount`, `TotalWithdrawn += amount`, ledger debit); PROCESSING → stays `processing`; FAILED/CANCELLED/REJECTED → `failed` (`Pending -= amount`, `Available += amount`) |
+| Mark paid (manual) | `PUT /api/admin/withdrawal-requests/{id}/mark-paid` | `Pending -= amount`, `TotalWithdrawn += amount`, ledger debit. Blocked while `processing`. |
+| Refresh payout status | `PUT /api/admin/withdrawal-requests/{id}/refresh-payout-status` | Reconciles a `processing` payout: finalizes `paid` or rolls back to `failed`/`Available` |
+| Retry payout | `POST /api/admin/withdrawal-requests/{id}/retry-payout` | `failed` only → re-reserve `Available -= amount`/`Pending += amount`, new idempotency key, status `processing` |
+| Reject | `PUT /api/admin/withdrawal-requests/{id}/reject` | `Pending -= amount`, `Available += amount`. Blocked while `processing`/`paid`. |
 
 Create preconditions:
 - Caller has a coach profile.
@@ -141,5 +149,10 @@ reconcile cannot double-notify, double-create the wallet, or re-stamp timestamps
   trusted as final — it only triggers this backend verification.
 - See [api/payments.md](api/payments.md) for the request/response contract and the frontend success/fail flow.
 
-### No automatic bank transfer in MVP
-There is **no real disbursement integration**. Coach payouts are recorded by the admin "mark paid" action after performing the transfer through an external/manual channel. PayOS is used only for **inbound** learner payments.
+### Disbursement modes
+- **Manual (`PayOs:AutoPayoutEnabled=false`, default):** no automated transfer. The admin performs the bank
+  transfer through an external channel and records it via "mark paid". PayOS is used only for **inbound** learner payments.
+- **Auto (`PayOs:AutoPayoutEnabled=true`):** admin **approval** initiates a real PayOS Chi (payout) transfer to the
+  coach's verified bank account, then the withdrawal moves through `processing → paid/failed` based on the PayOS result.
+
+In both modes the money is only ever sent **after admin approval** — never at coach request time.

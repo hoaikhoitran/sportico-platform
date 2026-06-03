@@ -15,11 +15,25 @@ Role: `admin` (granted out of band; no self-service endpoint).
 - UI: show bank details (`bankName`, masked `bankAccountNumber`, `bankAccountHolder`, `payoutMethod`). A coach cannot withdraw until their account is `verified`.
 
 ## Manage withdrawals
-- Queue: `GET /api/admin/withdrawal-requests/pending` (paged; filter by `status`).
-- Approve: `PUT /api/admin/withdrawal-requests/{id}/approve` → `approved` (no balance change).
-- Mark paid: `PUT /api/admin/withdrawal-requests/{id}/mark-paid` → `paid` (after the external bank transfer is done; writes the ledger debit).
-- Reject: `PUT /api/admin/withdrawal-requests/{id}/reject` with `{ "adminNote": "..." }` → `rejected` (funds returned to the coach's available balance).
-- UI: show coach, amount, requested date, and the linked payout account. Make the "mark paid" action explicit (it represents a real-world transfer that must already have happened).
+- Queue: `GET /api/admin/withdrawal-requests` (paged; `?status=`) — also `/pending` for back-compat.
+- Approve: `PUT /api/admin/withdrawal-requests/{id}/approve`.
+  - **Manual mode** (`PayOs__AutoPayoutEnabled=false`): → `approved` (no balance change). Admin then transfers externally and calls mark-paid.
+  - **Auto mode** (`PayOs__AutoPayoutEnabled=true`): triggers the PayOS payout → response is `processing`, `paid`, or `failed`. The UI must **read the returned status** and refresh the list/detail — do **not** show "money transferred" on approve unless the response is `paid`.
+- Mark paid: `PUT /api/admin/withdrawal-requests/{id}/mark-paid` → `paid` (manual mode, after the external transfer; writes the ledger debit). Blocked while `processing`.
+- Refresh payout status: `PUT /api/admin/withdrawal-requests/{id}/refresh-payout-status` (auto mode) — reconcile a `processing` payout to `paid`/`failed`.
+- Retry payout: `POST /api/admin/withdrawal-requests/{id}/retry-payout` — retry a `failed` payout.
+- Reject: `PUT /api/admin/withdrawal-requests/{id}/reject` with `{ "adminNote": "..." }` → `rejected` (funds returned). Blocked while `processing`/`paid`.
+
+Status labels (never claim payment until the backend returns `paid`):
+
+| Status | Label (vi) |
+|---|---|
+| `pending` | Chờ duyệt |
+| `approved` | Đã duyệt, cần xác nhận đã chuyển tiền (manual mode) |
+| `processing` | PayOS đang xử lý chuyển khoản |
+| `paid` | Đã thanh toán |
+| `failed` | Chuyển khoản thất bại |
+| `rejected` | Đã từ chối |
 
 ## Sports
 - Create: `POST /api/sports` (`name`, optional `slug`, `description`, `iconUrl`). Used to seed the catalog so coaches can register sports and create packages.

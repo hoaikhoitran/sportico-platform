@@ -155,11 +155,9 @@ namespace SporticoApp.Application.Services
             // ConflictException when the CoachWallet xmin token detects a concurrent write.
             await _withdrawalRepository.SaveChangesAsync();
 
-            // ── Automatic PayOS payout (if enabled) ────────────────────────────
-            if (_autoPayoutEnabled)
-            {
-                await TryInitiatePayOsPayoutAsync(withdrawal, wallet, payoutAccount);
-            }
+            // Creation ONLY reserves money. No PayOS payout is initiated here — even when
+            // PayOs:AutoPayoutEnabled is true the actual transfer is triggered by admin approval
+            // (ApproveAsync). A coach must never be able to move money before admin approval.
 
             return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
         }
@@ -290,7 +288,12 @@ namespace SporticoApp.Application.Services
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        // Admin: approve (used in manual / non-auto-payout flow)
+        // Admin: approve.
+        //   Manual mode (AutoPayoutEnabled=false): status → approved; admin transfers
+        //     externally and later calls mark-paid.
+        //   Auto mode   (AutoPayoutEnabled=true):  approval TRIGGERS the PayOS payout
+        //     (status → processing → paid/failed depending on PayOS).
+        // Money is never sent before this admin approval step.
         // ─────────────────────────────────────────────────────────────────────
         public async Task<Result<WithdrawalRequestResponse>> ApproveAsync(Guid adminId, Guid id)
         {
@@ -313,16 +316,53 @@ namespace SporticoApp.Application.Services
                     $"Cannot approve a withdrawal with status '{withdrawal.Status}'");
             }
 
-            withdrawal.Status = WithdrawalRequestStatuses.Approved;
             withdrawal.ReviewedByUserId = adminId;
             withdrawal.ReviewedAt = DateTime.UtcNow;
             withdrawal.UpdatedAt = DateTime.UtcNow;
 
+            // ── Manual mode: just mark approved ────────────────────────────────
+            if (!_autoPayoutEnabled)
+            {
+                withdrawal.Status = WithdrawalRequestStatuses.Approved;
+                await _withdrawalRepository.SaveChangesAsync();
+
+                await NotifyCoachAsync(withdrawal,
+                    "Withdrawal approved",
+                    "Your withdrawal request has been approved");
+
+                return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
+            }
+
+            // ── Auto mode: approval triggers the PayOS payout ──────────────────
+            var payoutAccount = withdrawal.CoachPayoutAccountId.HasValue
+                ? await _payoutAccountRepository.GetByIdForUpdateAsync(withdrawal.CoachPayoutAccountId.Value)
+                : await _payoutAccountRepository.GetByCoachIdAsync(withdrawal.CoachId);
+
+            if (payoutAccount == null || payoutAccount.Status != PayoutAccountStatuses.Verified)
+            {
+                throw new ConflictException(
+                    ErrorCodes.PayoutAccountRequired,
+                    "A verified payout account is required to pay out this withdrawal");
+            }
+
+            var wallet = await _walletRepository.GetByCoachIdForUpdateAsync(withdrawal.CoachId);
+            if (wallet == null)
+            {
+                throw new NotFoundException(ErrorCodes.CoachWalletNotFound, "Coach wallet not found");
+            }
+
+            // The reserved funds must still be held in PendingBalance.
+            EnsureSufficientPendingBalance(wallet, withdrawal.Amount);
+
+            // Mark processing before initiating, and persist the approval, so the intent is
+            // recorded even if the PayOS call below times out.
+            withdrawal.Status = WithdrawalRequestStatuses.Processing;
+            withdrawal.ProcessingAt = DateTime.UtcNow;
             await _withdrawalRepository.SaveChangesAsync();
 
-            await NotifyCoachAsync(withdrawal,
-                "Withdrawal approved",
-                "Your withdrawal request has been approved");
+            // withdrawal.Id is the stable first-attempt idempotency key.
+            await TryInitiatePayOsPayoutAsync(
+                withdrawal, wallet, payoutAccount, idempotencyKey: withdrawal.Id.ToString());
 
             return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
         }
@@ -478,30 +518,33 @@ namespace SporticoApp.Application.Services
             withdrawal.PayOsPayoutStatus = detailResponse.Data?.State;
             withdrawal.UpdatedAt = DateTime.UtcNow;
 
-            var state = (detailResponse.Data?.State ?? string.Empty).ToUpperInvariant();
-
-            if (state == "SUCCESS")
+            switch (ClassifyPayoutState(detailResponse.Data?.State))
             {
-                var wallet = await _walletRepository.GetByCoachIdForUpdateAsync(withdrawal.CoachId);
-                if (wallet == null)
-                    throw new NotFoundException(ErrorCodes.CoachWalletNotFound, "Coach wallet not found");
+                case PayoutOutcome.Success:
+                {
+                    var wallet = await _walletRepository.GetByCoachIdForUpdateAsync(withdrawal.CoachId);
+                    if (wallet == null)
+                        throw new NotFoundException(ErrorCodes.CoachWalletNotFound, "Coach wallet not found");
 
-                await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);
-                await NotifyCoachAsync(withdrawal, "Withdrawal paid", "Your withdrawal has been paid");
-            }
-            else if (state is "FAILED" or "CANCELLED" or "REJECTED")
-            {
-                var wallet = await _walletRepository.GetByCoachIdForUpdateAsync(withdrawal.CoachId);
-                if (wallet == null)
-                    throw new NotFoundException(ErrorCodes.CoachWalletNotFound, "Coach wallet not found");
+                    await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);
+                    await NotifyCoachAsync(withdrawal, "Withdrawal paid", "Your withdrawal has been paid");
+                    break;
+                }
 
-                await RollbackWithdrawalAsync(withdrawal, wallet,
-                    $"PayOS payout {state.ToLowerInvariant()}");
-            }
-            else
-            {
-                // Still processing
-                await _withdrawalRepository.SaveChangesAsync();
+                case PayoutOutcome.Failed:
+                {
+                    var wallet = await _walletRepository.GetByCoachIdForUpdateAsync(withdrawal.CoachId);
+                    if (wallet == null)
+                        throw new NotFoundException(ErrorCodes.CoachWalletNotFound, "Coach wallet not found");
+
+                    await RollbackWithdrawalAsync(withdrawal, wallet,
+                        $"PayOS payout {(detailResponse.Data?.State ?? "failed").ToLowerInvariant()}");
+                    break;
+                }
+
+                default: // Still processing
+                    await _withdrawalRepository.SaveChangesAsync();
+                    break;
             }
 
             return Result<WithdrawalRequestResponse>.Success(withdrawal.ToResponse());
@@ -679,24 +722,31 @@ namespace SporticoApp.Application.Services
                 return;
             }
 
-            var state = (payosResponse.Data?.State ?? string.Empty).ToUpperInvariant();
             withdrawal.PayOsPayoutId = payosResponse.Data?.Id;
             withdrawal.ProcessingAt = DateTime.UtcNow;
 
-            if (state == "SUCCESS")
+            switch (ClassifyPayoutState(payosResponse.Data?.State))
             {
-                await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);
-                await NotifyCoachAsync(withdrawal, "Withdrawal paid", "Your withdrawal has been paid");
-            }
-            else
-            {
-                // PROCESSING (or unknown state) — keep pending, admin can refresh later.
-                withdrawal.Status = WithdrawalRequestStatuses.Processing;
-                withdrawal.UpdatedAt = DateTime.UtcNow;
-                await _withdrawalRepository.SaveChangesAsync();
-                await NotifyCoachAsync(withdrawal,
-                    "Withdrawal processing",
-                    "Your withdrawal payout is being processed");
+                case PayoutOutcome.Success:
+                    await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);
+                    await NotifyCoachAsync(withdrawal, "Withdrawal paid", "Your withdrawal has been paid");
+                    break;
+
+                case PayoutOutcome.Failed:
+                    // PayOS accepted the envelope but the payout itself failed/was cancelled —
+                    // return the reserved funds.
+                    await RollbackWithdrawalAsync(withdrawal, wallet,
+                        $"PayOS payout {(payosResponse.Data?.State ?? "failed").ToLowerInvariant()}");
+                    break;
+
+                default: // Processing / pending / unknown — keep reserved, admin can refresh later.
+                    withdrawal.Status = WithdrawalRequestStatuses.Processing;
+                    withdrawal.UpdatedAt = DateTime.UtcNow;
+                    await _withdrawalRepository.SaveChangesAsync();
+                    await NotifyCoachAsync(withdrawal,
+                        "Withdrawal processing",
+                        "Your withdrawal payout is being processed");
+                    break;
             }
         }
 
@@ -780,6 +830,26 @@ namespace SporticoApp.Application.Services
             await NotifyCoachAsync(withdrawal,
                 "Withdrawal failed",
                 $"Your withdrawal could not be processed: {reason}");
+        }
+
+        private enum PayoutOutcome { Success, Processing, Failed }
+
+        /// <summary>
+        /// Normalizes the PayOS payout state defensively. PayOS documents PROCESSING | SUCCESS |
+        /// FAILED | CANCELLED, but we accept common spelling variants and treat any unknown state
+        /// as "processing" (keep funds reserved) rather than finalizing or rolling back blindly.
+        /// </summary>
+        private static PayoutOutcome ClassifyPayoutState(string? state)
+        {
+            var s = (state ?? string.Empty).Trim().ToUpperInvariant();
+            return s switch
+            {
+                "SUCCESS" or "SUCCEEDED" or "SUCCEED" or "PAID" or "COMPLETED" or "COMPLETE" or "DONE"
+                    => PayoutOutcome.Success,
+                "FAILED" or "FAIL" or "CANCELLED" or "CANCELED" or "REJECTED" or "REJECT" or "ERROR"
+                    => PayoutOutcome.Failed,
+                _ => PayoutOutcome.Processing, // PROCESSING, PENDING, unknown → stay reserved
+            };
         }
 
         /// <summary>

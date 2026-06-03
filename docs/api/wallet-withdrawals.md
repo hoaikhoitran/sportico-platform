@@ -17,14 +17,17 @@ Learner purchase
 Session completed (coach marks complete)
   └► CoachWallet.AvailableBalance += PerSessionCoachAmount  (already net of 15%)
 
-Coach requests withdrawal
+Coach requests withdrawal  (NEVER sends money)
   └► WithdrawalService.CreateAsync:
       AvailableBalance -= amount   ← reservation, NOT a second commission
       PendingBalance   += amount
-      └► If AutoPayoutEnabled = true:
-             PayOS payout created automatically
-         Else:
-             Admin approves → marks paid manually
+      status = pending             (no PayOS call here, even when AutoPayoutEnabled = true)
+
+Admin approves  (the ONLY place money can be sent)
+  └► WithdrawalService.ApproveAsync:
+      If AutoPayoutEnabled = false:  status = approved → admin transfers externally → mark-paid
+      If AutoPayoutEnabled = true:   status = processing → PayOS payout initiated
+                                     (idempotency key = withdrawal.Id)
 
 PayOS payout SUCCESS
   └► PendingBalance -= amount
@@ -52,8 +55,10 @@ Set in `appsettings.json` → `PayOs` section:
 }
 ```
 
-- `AutoPayoutEnabled = true` — PayOS Chi API is called immediately when the coach submits a withdrawal request.
-- `AutoPayoutEnabled = false` — Admin manually approves and marks paid (original flow, safe for development).
+- `AutoPayoutEnabled = true` — **admin approval** triggers the PayOS Chi payout. The coach's request only reserves money; nothing is sent until an admin approves.
+- `AutoPayoutEnabled = false` — manual mode: admin approves, transfers externally, then marks paid (safe default / development).
+
+> In **both** modes the coach's `POST /api/coaches/me/withdrawal-requests` only reserves funds (`status = pending`). Money is never moved before admin approval.
 
 ---
 
@@ -73,7 +78,9 @@ Withdrawal is rejected if no verified account exists.
 ## Coach endpoints
 
 ### POST /api/coaches/me/withdrawal-requests
-Creates a withdrawal request. If `AutoPayoutEnabled`, the PayOS payout is triggered automatically.
+Creates a withdrawal request. **Only reserves money** (`AvailableBalance → PendingBalance`, `status = pending`).
+No PayOS payout is initiated here, even when `AutoPayoutEnabled = true` — the payout is triggered by admin
+approval. Amount must be a positive whole VND value within `AvailableBalance`.
 
 **Body**: `{ "amount": 212500 }`
 
@@ -108,7 +115,7 @@ Withdrawal receipt for the authenticated coach.
 | `GET` | `/api/admin/withdrawal-requests` | List **all** withdrawals; `?status=` filters any status |
 | `GET` | `/api/admin/withdrawal-requests/pending` | List **pending only** (back-compat; = `?status=pending`) |
 | `GET` | `/api/admin/withdrawal-requests/{id}` | Single withdrawal detail (review modals) |
-| `PUT` | `/api/admin/withdrawal-requests/{id}/approve` | Approve (manual flow) |
+| `PUT` | `/api/admin/withdrawal-requests/{id}/approve` | Approve. Manual mode → `approved`; auto mode → triggers PayOS payout (`processing`/`paid`/`failed`) |
 | `PUT` | `/api/admin/withdrawal-requests/{id}/reject` | Reject + return balance |
 | `PUT` | `/api/admin/withdrawal-requests/{id}/mark-paid` | Manual mark-paid fallback |
 | `PUT` | `/api/admin/withdrawal-requests/{id}/refresh-payout-status` | Query PayOS for latest state |
@@ -138,21 +145,23 @@ Use `refresh-payout-status` to get the current state first.
 ## Withdrawal status lifecycle
 
 ```
-pending
-  ├─ (AutoPayoutEnabled) ──► processing ──► paid
-  │                      │            └──► failed
-  ├─ (admin approve)     ──► approved ──► paid (manual mark-paid)
-  └─ (admin reject)      ──► rejected
+pending  (coach request — money reserved only)
+  ├─ admin approve, AutoPayoutEnabled = true  ──► processing ──► paid
+  │                                           │              └──► failed (funds returned)
+  ├─ admin approve, AutoPayoutEnabled = false ──► approved ──► paid (manual mark-paid)
+  └─ admin reject                             ──► rejected (funds returned)
+
+failed ──► (admin retry-payout, new idempotency key) ──► processing ──► paid | failed
 ```
 
 | Status | Meaning |
 |--------|---------|
-| `pending` | Created; payout not yet initiated |
-| `processing` | PayOS accepted the payout; awaiting confirmation |
-| `paid` | Payout succeeded; funds delivered |
+| `pending` | Created by coach; funds reserved; **no payout initiated** |
+| `approved` | Admin approved in manual mode; awaiting external transfer + mark-paid |
+| `processing` | Admin approved in auto mode and PayOS accepted the payout; awaiting confirmation |
+| `paid` | Payout succeeded; funds delivered (one debit ledger row) |
 | `rejected` | Admin rejected; funds returned to AvailableBalance |
-| `failed` | PayOS payout failed; funds returned to AvailableBalance |
-| `approved` | Admin approved (manual-flow only) |
+| `failed` | PayOS payout failed/cancelled/rejected; funds returned to AvailableBalance |
 
 ---
 

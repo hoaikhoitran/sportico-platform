@@ -105,14 +105,27 @@ Admin verifies           PUT /api/admin/coach-payout-accounts/{id}/verify → ve
 Coach requests withdraw  POST /api/coaches/me/withdrawal-requests
                           → requires verified account + sufficient AvailableBalance
                           → moves amount Available → Pending; request status: pending
-Admin approves           PUT .../{id}/approve  → status: approved
-Admin marks paid         PUT .../{id}/mark-paid → status: paid
-                          → moves Pending → TotalWithdrawn; ledger debit (withdrawal)
-   or Admin rejects      PUT .../{id}/reject   → status: rejected
-                          → returns Pending → Available
+                          → NO payout is sent here (even if AutoPayoutEnabled = true)
+
+Admin approves           PUT .../{id}/approve   ← the only step that can send money
+  • Manual mode  (PayOs:AutoPayoutEnabled = false):
+        → status: approved
+        Admin marks paid   PUT .../{id}/mark-paid → status: paid
+                           → moves Pending → TotalWithdrawn; ledger debit (withdrawal)
+  • Auto mode    (PayOs:AutoPayoutEnabled = true):
+        → status: processing; PayOS Chi payout initiated (idempotency key = withdrawal.Id)
+        PayOS SUCCESS  → status: paid; Pending → TotalWithdrawn; ledger debit (withdrawal)
+        PayOS PROCESSING → status: processing (funds stay in Pending; refresh-payout-status later)
+        PayOS FAILED/CANCELLED/REJECTED → status: failed; Pending → Available (funds returned)
+
+   or Admin rejects      PUT .../{id}/reject   → status: rejected; returns Pending → Available
 ```
 
-> NOTE: There is no real automated bank transfer. "Mark paid" is an administrative action recording that the payout was made externally. See [08 — Payment and Wallet](08-payment-and-wallet.md).
+Admin tools: `refresh-payout-status` reconciles a `processing` payout against PayOS; `retry-payout`
+re-reserves funds and retries a `failed` payout with a NEW idempotency key.
+
+> NOTE: In manual mode there is no automated bank transfer — "mark paid" records an external transfer.
+> In auto mode the transfer is performed by PayOS at **admin approval** time. See [08 — Payment and Wallet](08-payment-and-wallet.md).
 
 ## PayOS Flow (detailed)
 

@@ -41,7 +41,8 @@ public class WithdrawalServiceTests
         string accountStatus = PayoutAccountStatuses.Verified,
         bool accountExists = true,
         WithdrawalRequest? withdrawal = null,
-        IEnumerable<WithdrawalRequest>? all = null)
+        IEnumerable<WithdrawalRequest>? all = null,
+        bool autoPayout = false)
     {
         var wallet = new CoachWallet
         {
@@ -80,7 +81,7 @@ public class WithdrawalServiceTests
             payos,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<WithdrawalService>.Instance,
             Microsoft.Extensions.Options.Options.Create(
-                new PayoutOptions { AutoPayoutEnabled = false, PayoutCategory = "salary" }),
+                new PayoutOptions { AutoPayoutEnabled = autoPayout, PayoutCategory = "salary" }),
             new PassValidator<CreateWithdrawalRequest>(),
             new PassValidator<WithdrawalRequestFilterRequest>(),
             new PassValidator<RejectWithdrawalRequest>());
@@ -108,6 +109,105 @@ public class WithdrawalServiceTests
         CreatedAt = DateTime.UtcNow,
         UpdatedAt = DateTime.UtcNow
     };
+
+    // ── Auto-payout-on-approve flow ──────────────────────────────────────────
+
+    // Create NEVER initiates PayOS payout, even when auto-payout is enabled.
+    [Fact]
+    public async Task Create_AutoPayoutEnabled_DoesNotCallPayOs_StaysPending()
+    {
+        var h = Build(available: 500m, pending: 0m, autoPayout: true);
+
+        var result = await h.Service.CreateAsync(CoachId, new CreateWithdrawalRequest { Amount = 100m });
+
+        Assert.Equal(WithdrawalRequestStatuses.Pending, result.Data!.Status);
+        Assert.Equal(400m, h.Wallet.AvailableBalance);
+        Assert.Equal(100m, h.Wallet.PendingBalance);
+        Assert.Equal(0, h.PayOs.CreateCallCount);   // no payout before admin approval
+    }
+
+    // Manual mode: approve only marks approved; PayOS is not called.
+    [Fact]
+    public async Task Approve_ManualMode_SetsApproved_NoPayOs()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Pending);
+        var h = Build(available: 400m, pending: 100m, withdrawal: w, autoPayout: false);
+
+        var result = await h.Service.ApproveAsync(Guid.NewGuid(), w.Id);
+
+        Assert.Equal(WithdrawalRequestStatuses.Approved, result.Data!.Status);
+        Assert.Equal(0, h.PayOs.CreateCallCount);
+        Assert.Equal(100m, h.Wallet.PendingBalance); // funds stay reserved until mark-paid
+    }
+
+    // Auto mode: approve triggers PayOS; SUCCESS finalizes as paid with one debit ledger row.
+    [Fact]
+    public async Task Approve_AutoMode_PayOsSuccess_FinalizesPaid()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Pending);
+        var h = Build(available: 400m, pending: 100m, totalWithdrawn: 0m, withdrawal: w, autoPayout: true);
+        h.PayOs.CreateState = "SUCCESS";
+
+        var result = await h.Service.ApproveAsync(Guid.NewGuid(), w.Id);
+
+        Assert.Equal(WithdrawalRequestStatuses.Paid, result.Data!.Status);
+        Assert.Equal(1, h.PayOs.CreateCallCount);
+        Assert.Equal(w.Id.ToString(), h.PayOs.LastIdempotencyKey); // stable first-attempt key
+        Assert.Equal(0m, h.Wallet.PendingBalance);
+        Assert.Equal(100m, h.Wallet.TotalWithdrawn);
+        Assert.Equal(400m, h.Wallet.AvailableBalance);            // NOT subtracted again
+        var tx = Assert.Single(h.Wallets.Transactions);
+        Assert.Equal(WalletTransactionTypes.Withdrawal, tx.Type);
+        Assert.Equal(WalletTransactionDirections.Debit, tx.Direction);
+    }
+
+    // Auto mode: PayOS PROCESSING keeps status processing and funds reserved, no ledger.
+    [Fact]
+    public async Task Approve_AutoMode_PayOsProcessing_KeepsProcessing()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Pending);
+        var h = Build(available: 400m, pending: 100m, withdrawal: w, autoPayout: true);
+        h.PayOs.CreateState = "PROCESSING";
+
+        var result = await h.Service.ApproveAsync(Guid.NewGuid(), w.Id);
+
+        Assert.Equal(WithdrawalRequestStatuses.Processing, result.Data!.Status);
+        Assert.Equal(100m, h.Wallet.PendingBalance);
+        Assert.Equal(400m, h.Wallet.AvailableBalance);
+        Assert.Empty(h.Wallets.Transactions);
+    }
+
+    // Auto mode: PayOS rejects the envelope (code != "00") → rollback funds, status failed.
+    [Fact]
+    public async Task Approve_AutoMode_PayOsRejected_RollsBackFailed()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Pending);
+        var h = Build(available: 400m, pending: 100m, withdrawal: w, autoPayout: true);
+        h.PayOs.CreateCode = "01"; // PayOS rejected
+
+        var result = await h.Service.ApproveAsync(Guid.NewGuid(), w.Id);
+
+        Assert.Equal(WithdrawalRequestStatuses.Failed, result.Data!.Status);
+        Assert.Equal(0m, h.Wallet.PendingBalance);
+        Assert.Equal(500m, h.Wallet.AvailableBalance);  // returned
+        Assert.Empty(h.Wallets.Transactions);
+    }
+
+    // Auto mode: PayOS returns code 00 but a terminal FAILED state → rollback funds.
+    [Fact]
+    public async Task Approve_AutoMode_PayOsTerminalFailedState_RollsBackFailed()
+    {
+        var w = Withdrawal(WithdrawalRequestStatuses.Pending);
+        var h = Build(available: 400m, pending: 100m, withdrawal: w, autoPayout: true);
+        h.PayOs.CreateCode = "00";
+        h.PayOs.CreateState = "CANCELLED";
+
+        var result = await h.Service.ApproveAsync(Guid.NewGuid(), w.Id);
+
+        Assert.Equal(WithdrawalRequestStatuses.Failed, result.Data!.Status);
+        Assert.Equal(500m, h.Wallet.AvailableBalance);
+        Assert.Empty(h.Wallets.Transactions);
+    }
 
     // 1. Creating a withdrawal requires a verified payout account.
     [Fact]
@@ -416,22 +516,28 @@ public class WithdrawalServiceTests
         public Task UpdateAsync(User user) => throw new NotImplementedException();
         public Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id) => throw new NotImplementedException();
         public Task<User?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
+        public Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedForAdminAsync(SporticoApp.Application.DTOs.Users.AdminUserFilterRequest filter) => throw new NotImplementedException();
+        public Task<User?> GetByIdForAdminUpdateAsync(Guid id) => throw new NotImplementedException();
+        public Task<bool> ExistsByEmailAsync(string email) => throw new NotImplementedException();
     }
 
     private sealed class FakePayoutService : IPayOsPayoutService
     {
         public string CreateState = "PROCESSING";
+        public string CreateCode = "00";          // "00" = envelope accepted; anything else = PayOS reject
         public string DetailState = "PROCESSING";
         public string? LastIdempotencyKey;
+        public int CreateCallCount;
 
         public Task<PayOsPayoutBalanceResponse> GetBalanceAsync() => throw new NotImplementedException();
 
         public Task<PayOsCreatePayoutResponse> CreatePayoutAsync(PayOsCreatePayoutRequest request, string idempotencyKey)
         {
+            CreateCallCount++;
             LastIdempotencyKey = idempotencyKey;
             return Task.FromResult(new PayOsCreatePayoutResponse
             {
-                Code = "00",
+                Code = CreateCode,
                 Desc = "ok",
                 Data = new PayOsPayoutData { Id = "po_new", State = CreateState },
                 RawJson = "{}"

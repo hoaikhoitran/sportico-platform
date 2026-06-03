@@ -26,8 +26,10 @@ Use the **double-underscore** form (`Section__Key`) for environment variables / 
 | `PayOs__ReturnUrl` | `PayOs:ReturnUrl` | `https://your-frontend/payment/success` | Frontend success page. |
 | `PayOs__CancelUrl` | `PayOs:CancelUrl` | `https://your-frontend/payment/cancel` | Frontend cancel page. |
 | `PayOs__PaymentLinkExpireMinutes` | `PayOs:PaymentLinkExpireMinutes` | `15` | Must be > 0. |
+| `PayOs__AutoPayoutEnabled` | `PayOs:AutoPayoutEnabled` | `false` | **Withdrawal payout mode.** `false` (default) = manual: admin approves then marks paid after an external transfer. `true` = admin **approval** triggers an automatic PayOS Chi payout. Coach withdrawal requests never send money in either mode. Set `PayOs__AutoPayoutEnabled=true` in production to enable automatic payouts. |
+| `PayOs__PayoutCategory` | `PayOs:PayoutCategory` | `salary` | PayOS payout category sent with Chi payouts (auto mode only). |
 
-If any of these are blank, creating a PayOS payment throws `PAYOS_CREATE_PAYMENT_FAILED` listing the missing keys.
+If any of the inbound-payment keys are blank, creating a PayOS payment throws `PAYOS_CREATE_PAYMENT_FAILED` listing the missing keys. Auto-payout additionally requires `AutoPayoutEnabled=true` and a verified coach payout account (`BankBin`, `BankAccountNumber`).
 
 ## Email (registration verification)
 
