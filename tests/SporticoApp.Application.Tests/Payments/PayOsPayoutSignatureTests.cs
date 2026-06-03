@@ -9,40 +9,34 @@ using Xunit;
 namespace SporticoApp.Application.Tests.Payments;
 
 /// <summary>
-/// Verifies the PayOS Chi (Payout) signature conventions:
-///   - canonical string covers the six signed fields sorted alphabetically
-///     (amount, description, referenceId, toAccountName [when present], toAccountNumber, toBin)
-///   - category is excluded from the canonical string
-///   - toAccountName is normalised (uppercase, diacritics stripped) before signing and before sending
-///   - the computed signature lives in the JSON request body as "signature", NOT in a header
+/// Verifies the PayOS Chi (Payout) request contract per official docs (POST /v1/payouts):
+///
+///   Signature:
+///     - Five fields sorted alphabetically: amount, description, referenceId,
+///       toAccountNumber, toBin  (no toAccountName, no category)
+///     - Algorithm: HMAC-SHA256(canonicalString, ChecksumKey), lowercase hex
+///     - Delivered as x-signature HTTP request header — NOT in the JSON body
+///
+///   Request body:
+///     - referenceId, amount, description, toBin, toAccountNumber
+///     - category: string array ["salary"] when configured; omitted when null
+///     - NO signature field in body
+///     - NO toAccountName field in body (response-only field)
 /// </summary>
 public class PayOsPayoutSignatureTests
 {
     // ── PayOsPayoutSigner.BuildCanonicalString ────────────────────────────────
 
     [Fact]
-    public void BuildCanonicalString_WithToAccountName_SortsAllSixFieldsAlphabetically()
+    public void BuildCanonicalString_SortsFiveFieldsAlphabetically()
     {
-        // Alphabetical (Ordinal): amount < description < referenceId < toAccountName < toAccountNumber < toBin
+        // amount < description < referenceId < toAccountNumber < toBin (Ordinal)
         var result = PayOsPayoutSigner.BuildCanonicalString(
             amount: 100_000,
             description: "SPORTICO WD",
             referenceId: "ref-abc",
-            toAccountName: "NGUYEN VAN A",
             toAccountNumber: "0123456789",
             toBin: "970418");
-
-        Assert.Equal(
-            "amount=100000&description=SPORTICO WD&referenceId=ref-abc" +
-            "&toAccountName=NGUYEN VAN A&toAccountNumber=0123456789&toBin=970418",
-            result);
-    }
-
-    [Fact]
-    public void BuildCanonicalString_WithoutToAccountName_SortsFiveFields()
-    {
-        var result = PayOsPayoutSigner.BuildCanonicalString(
-            100_000, "SPORTICO WD", "ref-abc", null, "0123456789", "970418");
 
         Assert.Equal(
             "amount=100000&description=SPORTICO WD&referenceId=ref-abc&toAccountNumber=0123456789&toBin=970418",
@@ -50,48 +44,25 @@ public class PayOsPayoutSignatureTests
     }
 
     [Fact]
-    public void BuildCanonicalString_EmptyToAccountName_TreatedAsAbsent()
+    public void BuildCanonicalString_DoesNotIncludeToAccountName()
     {
-        var withNull  = PayOsPayoutSigner.BuildCanonicalString(1, "d", "r", null,  "a", "b");
-        var withEmpty = PayOsPayoutSigner.BuildCanonicalString(1, "d", "r", "",    "a", "b");
-        Assert.Equal(withNull, withEmpty);
+        var result = PayOsPayoutSigner.BuildCanonicalString(1, "d", "r", "a", "b");
+        Assert.DoesNotContain("toAccountName", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("accountName",   result, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void BuildCanonicalString_DoesNotIncludeCategory()
     {
-        var result = PayOsPayoutSigner.BuildCanonicalString(1, "d", "r", null, "a", "b");
+        var result = PayOsPayoutSigner.BuildCanonicalString(1, "d", "r", "a", "b");
         Assert.DoesNotContain("category", result, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void BuildCanonicalString_DoesNotIncludeSignatureItself()
     {
-        var result = PayOsPayoutSigner.BuildCanonicalString(1, "d", "r", null, "a", "b");
+        var result = PayOsPayoutSigner.BuildCanonicalString(1, "d", "r", "a", "b");
         Assert.DoesNotContain("signature", result, StringComparison.OrdinalIgnoreCase);
-    }
-
-    // ── PayOsPayoutSigner.NormalizeAccountName ────────────────────────────────
-
-    [Theory]
-    [InlineData("NGUYEN VAN A",    "NGUYEN VAN A")]   // already normalised — no change
-    [InlineData("coach name",       "COACH NAME")]    // lowercase → uppercase
-    [InlineData("  coach  name  ",  "COACH NAME")]    // leading/trailing/internal whitespace
-    [InlineData("Nguyễn Văn A",     "NGUYEN VAN A")]  // Vietnamese diacritics stripped
-    [InlineData("Trần Thị B",       "TRAN THI B")]    // more Vietnamese diacritics
-    [InlineData("Đỗ Minh C",        "DO MINH C")]     // Đ → D
-    public void NormalizeAccountName_ProducesExpectedResult(string input, string expected)
-    {
-        Assert.Equal(expected, PayOsPayoutSigner.NormalizeAccountName(input));
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void NormalizeAccountName_NullOrWhitespace_ReturnsNull(string? input)
-    {
-        Assert.Null(PayOsPayoutSigner.NormalizeAccountName(input));
     }
 
     // ── PayOsPayoutSigner.Compute ─────────────────────────────────────────────
@@ -121,139 +92,103 @@ public class PayOsPayoutSignatureTests
         Assert.NotEqual(a, b);
     }
 
-    // ── Signature placement: body field, not HTTP header ─────────────────────
+    // ── Signature placement: x-signature header, NOT body ────────────────────
 
     [Fact]
-    public async Task CreatePayoutAsync_SignatureIsInBodyField_NotInHeader()
+    public async Task CreatePayoutAsync_SignatureIsInXSignatureHeader()
     {
         HttpRequestMessage? capturedRequest = null;
-        string? capturedBody = null;
 
         var svc = BuildService(new CapturingHandler((req, ct) =>
         {
             capturedRequest = req;
-            capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            _ = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
             return Task.FromResult(OkPayoutResponse());
         }));
 
-        await svc.CreatePayoutAsync(
-            new PayOsCreatePayoutRequest
-            {
-                ReferenceId = "wr-001", Amount = 200_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "0123456789", ToAccountName = "NGUYEN VAN A"
-            },
-            idempotencyKey: "wr-001");
+        await svc.CreatePayoutAsync(MinimalRequest("wr-h"), idempotencyKey: "wr-h");
 
-        var root = JsonDocument.Parse(capturedBody!).RootElement;
+        Assert.True(
+            capturedRequest!.Headers.TryGetValues("x-signature", out var vals),
+            "x-signature header must be present");
 
-        Assert.True(root.TryGetProperty("signature", out var sigProp),
-            "Request body must contain 'signature' field");
-        Assert.Matches("^[0-9a-f]{64}$", sigProp.GetString());
-
-        Assert.False(capturedRequest!.Headers.Contains("x-signature"),
-            "Request must NOT have x-signature header — signature belongs in the body");
+        var sig = vals!.Single();
+        Assert.Matches("^[0-9a-f]{64}$", sig);   // lowercase hex HMAC-SHA256
     }
 
     [Fact]
-    public async Task CreatePayoutAsync_SignatureMatchesExpectedHmac_IncludingNormalisedToAccountName()
+    public async Task CreatePayoutAsync_BodyDoesNotContainSignature()
     {
-        const string checksumKey = "test-checksum-key";
         string? capturedBody = null;
 
         var svc = BuildService(new CapturingHandler((req, ct) =>
         {
             capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
             return Task.FromResult(OkPayoutResponse());
+        }));
+
+        await svc.CreatePayoutAsync(MinimalRequest("wr-nosig"), idempotencyKey: "wr-nosig");
+
+        var root = JsonDocument.Parse(capturedBody!).RootElement;
+        Assert.False(
+            root.TryGetProperty("signature", out _),
+            "JSON body must NOT contain 'signature' — signature belongs in x-signature header");
+    }
+
+    [Fact]
+    public async Task CreatePayoutAsync_BodyDoesNotContainToAccountName()
+    {
+        string? capturedBody = null;
+
+        var svc = BuildService(new CapturingHandler((req, ct) =>
+        {
+            capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            return Task.FromResult(OkPayoutResponse());
+        }));
+
+        await svc.CreatePayoutAsync(MinimalRequest("wr-noname"), idempotencyKey: "wr-noname");
+
+        var root = JsonDocument.Parse(capturedBody!).RootElement;
+        Assert.False(
+            root.TryGetProperty("toAccountName", out _),
+            "toAccountName is a response-only field — must NOT appear in the request body");
+    }
+
+    [Fact]
+    public async Task CreatePayoutAsync_XSignatureMatchesExpectedHmac()
+    {
+        // The x-signature header value must equal HMAC-SHA256 of the 5-field canonical string.
+        const string checksumKey = "test-checksum-key";
+        HttpRequestMessage? capturedRequest = null;
+
+        var svc = BuildService(new CapturingHandler((req, ct) =>
+        {
+            capturedRequest = req;
+            _ = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            return Task.FromResult(OkPayoutResponse());
         }), checksumKey: checksumKey);
 
-        // Send raw Vietnamese name — service must normalise it and sign the normalised form
         await svc.CreatePayoutAsync(
             new PayOsCreatePayoutRequest
             {
                 ReferenceId = "wr-42", Amount = 100_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "0123456789", ToAccountName = "Nguyễn Văn A"
+                ToBin = "970418", ToAccountNumber = "0123456789"
             },
             idempotencyKey: "wr-42");
 
-        var bodySig = JsonDocument.Parse(capturedBody!).RootElement
-            .GetProperty("signature").GetString()!;
+        var headerSig = capturedRequest!.Headers.GetValues("x-signature").Single();
 
-        // Must sign the NORMALISED name "NGUYEN VAN A", not the raw "Nguyễn Văn A"
-        var normalised = PayOsPayoutSigner.NormalizeAccountName("Nguyễn Văn A");
-        var canonical  = PayOsPayoutSigner.BuildCanonicalString(
-            100_000, "SPORTICO WD", "wr-42", normalised, "0123456789", "970418");
+        var canonical = PayOsPayoutSigner.BuildCanonicalString(
+            100_000, "SPORTICO WD", "wr-42", "0123456789", "970418");
         var expected = PayOsPayoutSigner.Compute(canonical, checksumKey);
 
-        Assert.Equal(expected, bodySig);
+        Assert.Equal(expected, headerSig);
     }
 
-    [Fact]
-    public async Task CreatePayoutAsync_ToAccountNameInBody_IsNormalised()
-    {
-        // The body field must carry the normalised (uppercase, no diacritics) form
-        string? capturedBody = null;
-
-        var svc = BuildService(new CapturingHandler((req, ct) =>
-        {
-            capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-            return Task.FromResult(OkPayoutResponse());
-        }));
-
-        await svc.CreatePayoutAsync(
-            new PayOsCreatePayoutRequest
-            {
-                ReferenceId = "wr-norm", Amount = 100_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "0123456789", ToAccountName = "Nguyễn Văn A"
-            },
-            idempotencyKey: "wr-norm");
-
-        var root = JsonDocument.Parse(capturedBody!).RootElement;
-        Assert.True(root.TryGetProperty("toAccountName", out var nameProp));
-        Assert.Equal("NGUYEN VAN A", nameProp.GetString()); // normalised, not raw
-    }
+    // ── Body field contract ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task CreatePayoutAsync_ToAccountName_AffectsSignature()
-    {
-        // Changing toAccountName must produce a different signature (proves it's in the canonical string)
-        const string key = "ck";
-        string? body1 = null, body2 = null;
-
-        var svc1 = BuildService(new CapturingHandler((req, ct) =>
-        {
-            body1 = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-            return Task.FromResult(OkPayoutResponse());
-        }), checksumKey: key);
-
-        await svc1.CreatePayoutAsync(
-            new PayOsCreatePayoutRequest
-            {
-                ReferenceId = "wr-s", Amount = 100_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "0123456789", ToAccountName = "NGUYEN VAN A"
-            }, idempotencyKey: "wr-s");
-
-        var svc2 = BuildService(new CapturingHandler((req, ct) =>
-        {
-            body2 = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-            return Task.FromResult(OkPayoutResponse());
-        }), checksumKey: key);
-
-        await svc2.CreatePayoutAsync(
-            new PayOsCreatePayoutRequest
-            {
-                ReferenceId = "wr-s", Amount = 100_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "0123456789", ToAccountName = "TRAN THI B" // different
-            }, idempotencyKey: "wr-s");
-
-        var sig1 = JsonDocument.Parse(body1!).RootElement.GetProperty("signature").GetString();
-        var sig2 = JsonDocument.Parse(body2!).RootElement.GetProperty("signature").GetString();
-        Assert.NotEqual(sig1, sig2); // toAccountName is signed — different name = different sig
-    }
-
-    // ── Category conditional inclusion ───────────────────────────────────────
-
-    [Fact]
-    public async Task CreatePayoutAsync_CategoryOmitted_WhenNotConfigured()
+    public async Task CreatePayoutAsync_BodyContainsExactly5CoreFields_WhenNoCategory()
     {
         string? capturedBody = null;
 
@@ -263,76 +198,85 @@ public class PayOsPayoutSignatureTests
             return Task.FromResult(OkPayoutResponse());
         }));
 
-        await svc.CreatePayoutAsync(
-            new PayOsCreatePayoutRequest
-            {
-                ReferenceId = "wr-cat-none", Amount = 100_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "0123456789",
-                ToAccountName = "NGUYEN VAN A", Category = null
-            }, idempotencyKey: "wr-cat-none");
+        await svc.CreatePayoutAsync(MinimalRequest("wr-5f"), idempotencyKey: "wr-5f");
 
         var root = JsonDocument.Parse(capturedBody!).RootElement;
-        Assert.False(root.TryGetProperty("category", out _),
-            "category must be absent when not configured — PayOS rejects unknown values");
-    }
 
-    [Fact]
-    public async Task CreatePayoutAsync_CategoryIncluded_WhenExplicitlyConfigured()
-    {
-        string? capturedBody = null;
-
-        var svc = BuildService(new CapturingHandler((req, ct) =>
-        {
-            capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-            return Task.FromResult(OkPayoutResponse());
-        }));
-
-        await svc.CreatePayoutAsync(
-            new PayOsCreatePayoutRequest
-            {
-                ReferenceId = "wr-cat-biz", Amount = 100_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "0123456789",
-                ToAccountName = "NGUYEN VAN A", Category = "business"
-            }, idempotencyKey: "wr-cat-biz");
-
-        var root = JsonDocument.Parse(capturedBody!).RootElement;
-        Assert.True(root.TryGetProperty("category", out var catProp));
-        Assert.Equal("business", catProp.GetString());
-    }
-
-    // ── Full body field list ──────────────────────────────────────────────────
-
-    [Fact]
-    public async Task CreatePayoutAsync_BodyContainsAllRequiredFields()
-    {
-        string? capturedBody = null;
-
-        var svc = BuildService(new CapturingHandler((req, ct) =>
-        {
-            capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-            return Task.FromResult(OkPayoutResponse());
-        }));
-
-        await svc.CreatePayoutAsync(
-            new PayOsCreatePayoutRequest
-            {
-                ReferenceId = "wr-99", Amount = 50_000, Description = "SPORTICO WD",
-                ToBin = "970418", ToAccountNumber = "9876543210",
-                ToAccountName = "TRAN THI B", Category = "salary"
-            }, idempotencyKey: "wr-99");
-
-        var root = JsonDocument.Parse(capturedBody!).RootElement;
+        // Required fields
         Assert.True(root.TryGetProperty("referenceId", out _));
         Assert.True(root.TryGetProperty("amount", out _));
         Assert.True(root.TryGetProperty("description", out _));
         Assert.True(root.TryGetProperty("toBin", out _));
         Assert.True(root.TryGetProperty("toAccountNumber", out _));
-        Assert.True(root.TryGetProperty("toAccountName", out _));
-        Assert.True(root.TryGetProperty("signature", out _));
-        Assert.True(root.TryGetProperty("category", out _));
+
+        // Must NOT be present
+        Assert.False(root.TryGetProperty("signature",     out _), "signature must be in header, not body");
+        Assert.False(root.TryGetProperty("toAccountName", out _), "toAccountName is response-only");
+        Assert.False(root.TryGetProperty("category",      out _), "category absent when null");
+    }
+
+    // ── Category: omit when null, send as string array when configured ────────
+
+    [Fact]
+    public async Task CreatePayoutAsync_CategoryOmitted_WhenNull()
+    {
+        string? capturedBody = null;
+
+        var svc = BuildService(new CapturingHandler((req, ct) =>
+        {
+            capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            return Task.FromResult(OkPayoutResponse());
+        }));
+
+        await svc.CreatePayoutAsync(
+            new PayOsCreatePayoutRequest
+            {
+                ReferenceId = "wr-nocat", Amount = 100_000, Description = "SPORTICO WD",
+                ToBin = "970418", ToAccountNumber = "0123456789", Category = null
+            }, idempotencyKey: "wr-nocat");
+
+        var root = JsonDocument.Parse(capturedBody!).RootElement;
+        Assert.False(root.TryGetProperty("category", out _),
+            "category must be absent from body when null");
+    }
+
+    [Fact]
+    public async Task CreatePayoutAsync_CategoryIsStringArray_WhenConfigured()
+    {
+        string? capturedBody = null;
+
+        var svc = BuildService(new CapturingHandler((req, ct) =>
+        {
+            capturedBody = req.Content!.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            return Task.FromResult(OkPayoutResponse());
+        }));
+
+        await svc.CreatePayoutAsync(
+            new PayOsCreatePayoutRequest
+            {
+                ReferenceId = "wr-cat", Amount = 100_000, Description = "SPORTICO WD",
+                ToBin = "970418", ToAccountNumber = "0123456789", Category = "salary"
+            }, idempotencyKey: "wr-cat");
+
+        var root = JsonDocument.Parse(capturedBody!).RootElement;
+        Assert.True(root.TryGetProperty("category", out var catProp),
+            "category must be in body when configured");
+
+        // Must be a JSON array, not a plain string
+        Assert.Equal(JsonValueKind.Array, catProp.ValueKind);
+        var items = catProp.EnumerateArray().ToList();
+        Assert.Single(items);
+        Assert.Equal("salary", items[0].GetString());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private static PayOsCreatePayoutRequest MinimalRequest(string refId) =>
+        new()
+        {
+            ReferenceId = refId, Amount = 100_000, Description = "SPORTICO WD",
+            ToBin = "970418", ToAccountNumber = "0123456789"
+        };
 
     private static PayOsPayoutService BuildService(
         CapturingHandler handler,
@@ -340,11 +284,11 @@ public class PayOsPayoutSignatureTests
         string clientId = "cid",
         string apiKey = "akey")
     {
-        var client = new HttpClient(handler) { BaseAddress = new Uri("https://api-merchant.payos.vn") };
+        var client   = new HttpClient(handler) { BaseAddress = new Uri("https://api-merchant.payos.vn") };
         var settings = MsOptions.Options.Create(new PayOsPayoutSettings
         {
             ClientId = clientId, ApiKey = apiKey, ChecksumKey = checksumKey,
-            BaseUrl = "https://api-merchant.payos.vn"
+            BaseUrl  = "https://api-merchant.payos.vn"
         });
         return new PayOsPayoutService(client, settings, NullLogger<PayOsPayoutService>.Instance);
     }
@@ -362,7 +306,8 @@ public class PayOsPayoutSignatureTests
         private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _send;
         public CapturingHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send)
             => _send = send;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
             => _send(request, cancellationToken);
     }
 }

@@ -150,18 +150,5 @@ namespace SporticoApp.Api.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Returns safe diagnostic info about the payout account linked to a withdrawal.
-        /// Use this to debug PayOS Chi rejections: shows BIN validity, masked account number,
-        /// raw vs normalised account holder name, and whether diacritics were stripped.
-        /// </summary>
-        [HttpGet("api/admin/withdrawal-requests/{id:guid}/payout-account-debug")]
-        [Authorize(Roles = RoleConstants.Admin)]
-        [ProducesResponseType(typeof(Result<PayoutAccountDebugResponse>), 200)]
-        public async Task<IActionResult> GetPayoutAccountDebug(Guid id)
-        {
-            var result = await _withdrawalService.GetPayoutAccountDebugAsync(id);
-            return Ok(result);
-        }
     }
 }

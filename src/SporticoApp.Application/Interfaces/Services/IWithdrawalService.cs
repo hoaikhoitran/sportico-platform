@@ -45,12 +45,5 @@ namespace SporticoApp.Application.Interfaces.Services
         Task<Result<WithdrawalReceiptResponse>> GetReceiptAsync(Guid coachId, Guid id);
 
         Task<Result<WithdrawalReceiptResponse>> GetReceiptAdminAsync(Guid id);
-
-        /// <summary>
-        /// Admin diagnostic: returns safe payout account metadata for a withdrawal to help debug
-        /// PayOS Chi rejections. Shows raw vs normalised account holder, BIN validity, etc.
-        /// Never returns credentials or full account numbers.
-        /// </summary>
-        Task<Result<PayoutAccountDebugResponse>> GetPayoutAccountDebugAsync(Guid id);
     }
 }

@@ -100,68 +100,48 @@ namespace SporticoApp.Infrastructure.Services.Payments
             ValidatePayoutSettings();
             ValidatePayoutRequest(request);
 
-            // Normalise account holder name before signing and before including in body.
-            // PayOS validates toAccountName against the bank's record, which stores names in
-            // uppercase Latin (as they appear on the card / in bank inquiry responses).
-            // Vietnamese diacritics must be stripped: "Nguyễn Văn A" → "NGUYEN VAN A".
-            var normalizedAccountName = PayOsPayoutSigner.NormalizeAccountName(request.ToAccountName);
-
-            // Canonical string: amount, description, referenceId, toAccountName (when present),
-            // toAccountNumber, toBin — sorted alphabetically (Ordinal). category is excluded.
+            // Canonical string: exactly five fields sorted alphabetically (Ordinal).
+            // toAccountName is a response-only field — not a request field, not signed.
+            // category is excluded from the canonical string.
             var canonicalString = PayOsPayoutSigner.BuildCanonicalString(
                 request.Amount,
                 request.Description,
                 request.ReferenceId,
-                normalizedAccountName,
                 request.ToAccountNumber,
                 request.ToBin);
 
-            // PayOS Chi API: the signature must be sent as the "signature" field in the JSON
-            // request body — NOT as an x-signature HTTP header.
+            // PayOS Chi API: signature is sent as the x-signature HTTP request header,
+            // NOT as a field in the JSON request body.
             var signature = PayOsPayoutSigner.Compute(canonicalString, _settings.ChecksumKey);
 
             var body = new Dictionary<string, object?>
             {
-                ["referenceId"] = request.ReferenceId,
-                ["amount"] = request.Amount,
-                ["description"] = request.Description,
-                ["toBin"] = request.ToBin,
+                ["referenceId"]     = request.ReferenceId,
+                ["amount"]          = request.Amount,
+                ["description"]     = request.Description,
+                ["toBin"]           = request.ToBin,
                 ["toAccountNumber"] = request.ToAccountNumber,
-                ["signature"] = signature
             };
 
-            // toAccountName: send the normalised form — the same value that was signed.
-            if (!string.IsNullOrEmpty(normalizedAccountName))
-            {
-                body["toAccountName"] = normalizedAccountName;
-            }
-
-            // category is optional and merchant-account-specific.
-            // Omit entirely when not configured — an unrecognised value causes PayOS to reject.
+            // category is optional, merchant-account-specific, and sent as a string array per
+            // PayOS Chi API spec. Omit entirely when not configured.
             if (!string.IsNullOrWhiteSpace(request.Category))
             {
-                body["category"] = request.Category;
+                body["category"] = new[] { request.Category };
             }
 
             // Pre-send diagnostics — enough to diagnose PayOS rejections without exposing secrets.
-            // ClientId, ApiKey, ChecksumKey, and the raw signature value are never logged.
+            // ClientId, ApiKey, ChecksumKey, and the signature value are never logged.
             _logger.LogInformation(
                 "PayOS Chi pre-send: referenceId={ReferenceId} amount={Amount} " +
                 "description={Description} toBin={ToBin} maskedAccount={MaskedAccount} " +
-                "toAccountNameIncluded={ToAccountNameIncluded} " +
-                "rawAccountHolder={RawAccountHolder} normalizedAccountHolder={NormalizedAccountHolder} " +
-                "accountHolderLength={AccountHolderLength} " +
                 "categoryIncluded={CategoryIncluded} category={Category} " +
-                "bodyFields=[{BodyFields}]",
+                "signatureLocation=header bodyFields=[{BodyFields}]",
                 request.ReferenceId,
                 request.Amount,
                 request.Description,
                 request.ToBin,
                 MaskAccountNumber(request.ToAccountNumber),
-                body.ContainsKey("toAccountName"),
-                request.ToAccountName,       // raw (not a secret — it's the holder name, not a credential)
-                normalizedAccountName,
-                normalizedAccountName?.Length ?? 0,
                 body.ContainsKey("category"),
                 request.Category,
                 string.Join(", ", body.Keys));
@@ -171,6 +151,7 @@ namespace SporticoApp.Infrastructure.Services.Payments
                 "/v1/payouts");
 
             AddAuthHeaders(httpRequest, idempotencyKey);
+            httpRequest.Headers.Add("x-signature", signature);
             httpRequest.Content = JsonContent.Create(body);
 
             var response = await _httpClient.SendAsync(httpRequest);
@@ -384,11 +365,6 @@ namespace SporticoApp.Infrastructure.Services.Payments
             {
                 details.Add($"ToAccountNumber must contain digits only (got length={request.ToAccountNumber.Length})");
             }
-
-            // Account holder name is required and must be non-empty after normalisation.
-            var normalizedHolder = PayOsPayoutSigner.NormalizeAccountName(request.ToAccountName);
-            if (string.IsNullOrEmpty(normalizedHolder))
-                details.Add("ToAccountName (BankAccountHolder) is required and must be non-empty after normalisation");
 
             if (details.Count > 0)
             {

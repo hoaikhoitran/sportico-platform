@@ -210,9 +210,10 @@ public class WithdrawalServiceTests
         Assert.Empty(h.Wallets.Transactions);
     }
 
-    // Auto mode: the PayOS payout request carries the exact contract fields the spec mandates —
-    // integer VND amount, withdrawal id as referenceId, fixed description, destination bank fields,
-    // account holder name (toAccountName), and no category when none is configured.
+    // Auto mode: the PayOS payout request carries exactly the documented body fields —
+    // integer VND amount, withdrawal id as referenceId, fixed description, destination
+    // bank BIN and account number.  No toAccountName (response-only field).
+    // No category when none is configured (no default "salary").
     [Fact]
     public async Task Approve_AutoMode_SendsExactPayoutContractFields()
     {
@@ -224,13 +225,12 @@ public class WithdrawalServiceTests
 
         var req = h.PayOs.LastRequest;
         Assert.NotNull(req);
-        Assert.Equal(150_000, req!.Amount);                  // decimal VND → int VND
+        Assert.Equal(150_000, req!.Amount);           // decimal VND → int VND
         Assert.Equal(w.Id.ToString(), req.ReferenceId);
         Assert.Equal("SPORTICO WD", req.Description);
         Assert.Equal("970418", req.ToBin);
         Assert.Equal("0123456789", req.ToAccountNumber);
-        Assert.Equal("COACH NAME", req.ToAccountName);       // from BankAccountHolder
-        Assert.Null(req.Category);                           // omitted — no default "salary"
+        Assert.Null(req.Category);                    // omitted — no default "salary"
     }
 
     // Auto mode: fractional VND is rounded to a whole integer (VND has no minor units) rather than

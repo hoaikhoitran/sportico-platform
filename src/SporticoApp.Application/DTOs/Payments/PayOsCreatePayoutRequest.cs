@@ -16,15 +16,8 @@ namespace SporticoApp.Application.DTOs.Payments
         public string ToAccountNumber { get; set; } = string.Empty;
 
         /// <summary>
-        /// Account holder name as registered with the bank (e.g. "NGUYEN VAN A").
-        /// Sent as "toAccountName" in the PayOS Chi request body.
-        /// Not included in the HMAC-SHA256 signature canonical string.
-        /// Populate from CoachPayoutAccount.BankAccountHolder.
-        /// </summary>
-        public string? ToAccountName { get; set; }
-
-        /// <summary>
         /// Optional PayOS payout category (e.g. "salary", "business").
+        /// Sent as a JSON string array ["salary"] per PayOS Chi API spec.
         /// Leave null to omit from the request body entirely.
         /// Only set when the PayOS merchant account has this field configured.
         /// </summary>
