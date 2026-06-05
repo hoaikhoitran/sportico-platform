@@ -20,6 +20,7 @@ namespace SporticoApp.Application.Services
         private readonly ICoachAvailabilityRepository _availabilityRepository;
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
+        private readonly IBookingSessionUsageService _sessionUsageService;
         private readonly ILogger<TrainingSessionService> _logger;
         private readonly IValidator<CreateTrainingSessionRequest> _createValidator;
         private readonly IValidator<ConfirmTrainingSessionRequest> _confirmValidator;
@@ -32,6 +33,7 @@ namespace SporticoApp.Application.Services
             ICoachAvailabilityRepository availabilityRepository,
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
+            IBookingSessionUsageService sessionUsageService,
             ILogger<TrainingSessionService> logger,
             IValidator<CreateTrainingSessionRequest> createValidator,
             IValidator<ConfirmTrainingSessionRequest> confirmValidator,
@@ -43,6 +45,7 @@ namespace SporticoApp.Application.Services
             _availabilityRepository = availabilityRepository;
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
+            _sessionUsageService = sessionUsageService;
             _logger = logger;
             _createValidator = createValidator;
             _confirmValidator = confirmValidator;
@@ -126,19 +129,13 @@ namespace SporticoApp.Application.Services
                     "Booking package has expired");
             }
 
-            // ── 3. Session-quota check (requested + scheduled + completed) ────────
-            var countedStatuses = new List<string>
-            {
-                TrainingSessionStatuses.Requested,
-                TrainingSessionStatuses.Scheduled,
-                TrainingSessionStatuses.Completed
-            };
+            // ── 3. Session-quota check (shared usage rule, scoped strictly by THIS booking) ──
+            // Uses the same BookingSessionUsage logic the booking responses use, so the count the
+            // learner sees and the count enforced here can never diverge. A learner who buys a new
+            // package gets a fresh booking id → fresh usage → not blocked by an old booking.
+            var usage = await _sessionUsageService.GetAsync(booking.Id, booking.TotalSessions);
 
-            var usedSessions = await _trainingSessionRepository.CountByBookingAsync(
-                booking.Id,
-                countedStatuses);
-
-            if (usedSessions >= booking.TotalSessions)
+            if (!usage.CanBookSession)
             {
                 throw new ConflictException(
                     ErrorCodes.SessionLimitExceeded,
@@ -243,8 +240,16 @@ namespace SporticoApp.Application.Services
             slot.UpdatedAt = DateTime.UtcNow;
             slot.Version++; // optimistic concurrency: collide with any concurrent booking of this slot
 
-            // Session insert + slot update share the one scoped DbContext, so this single
-            // SaveChanges persists both atomically (and asserts the slot Version token).
+            // Bump the booking's optimistic concurrency token so two concurrent create-session
+            // requests for the SAME booking cannot both pass the quota check and exceed TotalSessions:
+            // both read version=N, both write version=N+1 asserting WHERE version=N — the second
+            // SaveChanges raises a concurrency conflict (surfaced as 409) and the learner retries
+            // against the up-to-date usage.
+            booking.Version++;
+            booking.UpdatedAt = DateTime.UtcNow;
+
+            // Session insert + slot update + booking version bump share the one scoped DbContext, so
+            // this single SaveChanges persists all atomically (and asserts both Version tokens).
             await _trainingSessionRepository.AddAsync(session);
 
             // Side effect only — must not fail the already-committed session creation.
@@ -523,7 +528,14 @@ namespace SporticoApp.Application.Services
                     "Booking not found");
             }
 
-            booking.CompletedSessions += 1;
+            // Re-sync the denormalized counter to the REAL completed count rather than blindly
+            // incrementing — this self-heals any historical drift and stays consistent with the
+            // usage that booking responses report. The DB count excludes this session (not yet
+            // saved), so the new authoritative total is (committed completed) + 1.
+            var completedInDb = await _trainingSessionRepository.CountByBookingAsync(
+                booking.Id,
+                new List<string> { TrainingSessionStatuses.Completed });
+            booking.CompletedSessions = completedInDb + 1;
 
             var wallet = await _coachWalletRepository.GetByCoachIdForUpdateAsync(booking.CoachId);
             if (wallet == null)

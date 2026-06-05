@@ -1,0 +1,655 @@
+warning: in the working copy of 'src/SporticoApp.Application/Services/WithdrawalService.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/SporticoApp.Infrastructure/Services/Payments/PayOsPayoutService.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/SporticoApp.Application.Tests/Availability/CoachAvailabilityServiceTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/SporticoApp.Application.Tests/Payments/BookingPaymentFlowTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/SporticoApp.Application.Tests/Payments/ManualPurchaseGuardTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/SporticoApp.Application.Tests/Payments/PlatformFeeMathTests.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionCreateTests.cs', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/SporticoApp.Shared/Constants/TrainingSessionStatuses.cs b/SporticoApp.Shared/Constants/TrainingSessionStatuses.cs[m
+[1mindex 58c29bd..05940b1 100644[m
+[1m--- a/SporticoApp.Shared/Constants/TrainingSessionStatuses.cs[m
+[1m+++ b/SporticoApp.Shared/Constants/TrainingSessionStatuses.cs[m
+[36m@@ -14,5 +14,20 @@[m [mnamespace SporticoApp.Shared.Constants[m
+         /// filtered unique index used.[m
+         /// </summary>[m
+         public static readonly string[] CapacityOccupying = { Requested, Scheduled, Completed };[m
+[32m+[m
+[32m+[m[32m        /// <summary>[m
+[32m+[m[32m        /// Statuses that consume a session slot of a booking's package quota (`usedSessions`).[m
+[32m+[m[32m        /// A learner can book until <c>usedSessions &gt;= Booking.TotalSessions</c>.[m
+[32m+[m[32m        ///[m
+[32m+[m[32m        /// Rule (authoritative — used by BOTH the create-session quota check and the booking[m
+[32m+[m[32m        /// response so the two never diverge):[m
+[32m+[m[32m        ///   - requested, scheduled, completed, missed  → consume a slot[m
+[32m+[m[32m        ///   - cancelled                                → releases the slot (does NOT consume)[m
+[32m+[m[32m        ///[m
+[32m+[m[32m        /// Rationale: a learner who has requested/scheduled all sessions has used the package even[m
+[32m+[m[32m        /// before completion; a no-show (missed) still consumes the session; only an explicit[m
+[32m+[m[32m        /// cancellation frees the slot for re-booking.[m
+[32m+[m[32m        /// </summary>[m
+[32m+[m[32m        public static readonly string[] BookingQuotaConsuming = { Requested, Scheduled, Completed, Missed };[m
+     }[m
+ }[m
+[1mdiff --git a/src/SporticoApp.Application/DTOs/Bookings/BookingResponse.cs b/src/SporticoApp.Application/DTOs/Bookings/BookingResponse.cs[m
+[1mindex ee2fe2e..cc778e7 100644[m
+[1m--- a/src/SporticoApp.Application/DTOs/Bookings/BookingResponse.cs[m
+[1m+++ b/src/SporticoApp.Application/DTOs/Bookings/BookingResponse.cs[m
+[36m@@ -24,8 +24,24 @@[m [mnamespace SporticoApp.Application.DTOs.Bookings[m
+ [m
+         public int TotalSessions { get; set; }[m
+ [m
+[32m+[m[32m        /// <summary>Sessions actually completed (real count from TrainingSession rows).</summary>[m
+         public int CompletedSessions { get; set; }[m
+ [m
+[32m+[m[32m        /// <summary>[m
+[32m+[m[32m        /// Sessions consuming a quota slot: requested + scheduled + completed + missed[m
+[32m+[m[32m        /// (cancelled excluded). This — not CompletedSessions — governs whether more can be booked.[m
+[32m+[m[32m        /// </summary>[m
+[32m+[m[32m        public int UsedSessions { get; set; }[m
+[32m+[m
+[32m+[m[32m        /// <summary>Remaining bookable slots = max(0, TotalSessions − UsedSessions).</summary>[m
+[32m+[m[32m        public int RemainingSessions { get; set; }[m
+[32m+[m
+[32m+[m[32m        /// <summary>True when the package still has a free slot (RemainingSessions &gt; 0).</summary>[m
+[32m+[m[32m        public bool CanBookSession { get; set; }[m
+[32m+[m
+[32m+[m[32m        /// <summary>Raw count per session status (only non-zero statuses present).</summary>[m
+[32m+[m[32m        public IReadOnlyDictionary<string, int>? SessionCountsByStatus { get; set; }[m
+[32m+[m
+         public string Status { get; set; } = string.Empty;[m
+ [m
+         public DateTime? PaidAt { get; set; }[m
+[1mdiff --git a/src/SporticoApp.Application/DependencyInjection.cs b/src/SporticoApp.Application/DependencyInjection.cs[m
+[1mindex 2d003f6..86ee790 100644[m
+[1m--- a/src/SporticoApp.Application/DependencyInjection.cs[m
+[1m+++ b/src/SporticoApp.Application/DependencyInjection.cs[m
+[36m@@ -24,6 +24,7 @@[m [mnamespace SporticoApp.Application[m
+             services.AddScoped<IAdminTrainingPackageService, AdminTrainingPackageService>();[m
+             services.AddScoped<IPublicTrainingPackageService, PublicTrainingPackageService>();[m
+             services.AddScoped<IBookingService, BookingService>();[m
+[32m+[m[32m            services.AddScoped<IBookingSessionUsageService, BookingSessionUsageService>();[m
+             services.AddScoped<ITrainingSessionService, TrainingSessionService>();[m
+             services.AddScoped<ILearnerAssessmentService, LearnerAssessmentService>();[m
+             services.AddScoped<ITrainingPlanService, TrainingPlanService>();[m
+[1mdiff --git a/src/SporticoApp.Application/Interfaces/Repositories/ITrainingSessionRepository.cs b/src/SporticoApp.Application/Interfaces/Repositories/ITrainingSessionRepository.cs[m
+[1mindex a743fcb..328646d 100644[m
+[1m--- a/src/SporticoApp.Application/Interfaces/Repositories/ITrainingSessionRepository.cs[m
+[1m+++ b/src/SporticoApp.Application/Interfaces/Repositories/ITrainingSessionRepository.cs[m
+[36m@@ -15,6 +15,16 @@[m [mnamespace SporticoApp.Application.Interfaces.Repositories[m
+ [m
+         Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses);[m
+ [m
+[32m+[m[32m        /// <summary>Session counts grouped by status for one booking (only non-zero statuses present).</summary>[m
+[32m+[m[32m        Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId);[m
+[32m+[m
+[32m+[m[32m        /// <summary>[m
+[32m+[m[32m        /// Session counts grouped by (booking, status) for many bookings in one query (avoids N+1).[m
+[32m+[m[32m        /// Outer key = bookingId; inner = status→count (only non-zero present; absent booking = no sessions).[m
+[32m+[m[32m        /// </summary>[m
+[32m+[m[32m        Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync([m
+[32m+[m[32m            IReadOnlyCollection<Guid> bookingIds);[m
+[32m+[m
+         /// <summary>[m
+         /// Counts active (capacity-occupying) sessions on one availability slot. Optionally excludes a[m
+         /// session id (used during cancellation to count the OTHER active sessions).[m
+[1mdiff --git a/src/SporticoApp.Application/Mappings/BookingMappingExtensions.cs b/src/SporticoApp.Application/Mappings/BookingMappingExtensions.cs[m
+[1mindex b6f1177..c17cf15 100644[m
+[1m--- a/src/SporticoApp.Application/Mappings/BookingMappingExtensions.cs[m
+[1m+++ b/src/SporticoApp.Application/Mappings/BookingMappingExtensions.cs[m
+[36m@@ -5,6 +5,12 @@[m [mnamespace SporticoApp.Application.Mappings[m
+ {[m
+     public static class BookingMappingExtensions[m
+     {[m
+[32m+[m[32m        /// <summary>[m
+[32m+[m[32m        /// Base mapping. Session-usage fields (UsedSessions/RemainingSessions/CanBookSession and the[m
+[32m+[m[32m        /// authoritative CompletedSessions) fall back to the denormalized <c>Booking.CompletedSessions</c>[m
+[32m+[m[32m        /// and are only reliable once enriched with real usage — prefer[m
+[32m+[m[32m        /// <see cref="ToResponse(Booking, BookingSessionUsage)"/> for any learner/coach-facing response.[m
+[32m+[m[32m        /// </summary>[m
+         public static BookingResponse ToResponse(this Booking booking)[m
+         {[m
+             return new BookingResponse[m
+[36m@@ -21,6 +27,9 @@[m [mnamespace SporticoApp.Application.Mappings[m
+                 PerSessionCoachAmount = booking.PerSessionCoachAmount,[m
+                 TotalSessions = booking.TotalSessions,[m
+                 CompletedSessions = booking.CompletedSessions,[m
+[32m+[m[32m                UsedSessions = booking.CompletedSessions,[m
+[32m+[m[32m                RemainingSessions = booking.TotalSessions - booking.CompletedSessions,[m
+[32m+[m[32m                CanBookSession = booking.TotalSessions - booking.CompletedSessions > 0,[m
+                 Status = booking.Status,[m
+                 PaidAt = booking.PaidAt,[m
+                 CompletedAt = booking.CompletedAt,[m
+[36m@@ -30,5 +39,21 @@[m [mnamespace SporticoApp.Application.Mappings[m
+                 UpdatedAt = booking.UpdatedAt[m
+             };[m
+         }[m
+[32m+[m
+[32m+[m[32m        /// <summary>[m
+[32m+[m[32m        /// Maps a booking and overwrites the session-usage fields with the authoritative, real-time[m
+[32m+[m[32m        /// usage computed from TrainingSession rows. Use this for all learner/coach booking responses.[m
+[32m+[m[32m        /// </summary>[m
+[32m+[m[32m        public static BookingResponse ToResponse(this Booking booking, BookingSessionUsage usage)[m
+[32m+[m[32m        {[m
+[32m+[m[32m            var response = booking.ToResponse();[m
+[32m+[m[32m            response.TotalSessions = usage.TotalSessions;[m
+[32m+[m[32m            response.CompletedSessions = usage.CompletedSessions;[m
+[32m+[m[32m            response.UsedSessions = usage.UsedSessions;[m
+[32m+[m[32m            response.RemainingSessions = usage.RemainingSessions;[m
+[32m+[m[32m            response.CanBookSession = usage.CanBookSession;[m
+[32m+[m[32m            response.SessionCountsByStatus = usage.SessionCountsByStatus;[m
+[32m+[m[32m            return response;[m
+[32m+[m[32m        }[m
+     }[m
+ }[m
+[1mdiff --git a/src/SporticoApp.Application/Services/BookingService.cs b/src/SporticoApp.Application/Services/BookingService.cs[m
+[1mindex cfafc4d..5fbeace 100644[m
+[1m--- a/src/SporticoApp.Application/Services/BookingService.cs[m
+[1m+++ b/src/SporticoApp.Application/Services/BookingService.cs[m
+[36m@@ -27,6 +27,7 @@[m [mnamespace SporticoApp.Application.Services[m
+         private readonly IPayOsService _payOsService;[m
+         private readonly ICoachWalletRepository _coachWalletRepository;[m
+         private readonly INotificationRepository _notificationRepository;[m
+[32m+[m[32m        private readonly IBookingSessionUsageService _sessionUsageService;[m
+         private readonly ILogger<BookingService> _logger;[m
+         private readonly bool _enableManualPurchase;[m
+         private readonly IValidator<PurchaseTrainingPackageManualRequest> _manualValidator;[m
+[36m@@ -40,6 +41,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             IPayOsService payOsService,[m
+             ICoachWalletRepository coachWalletRepository,[m
+             INotificationRepository notificationRepository,[m
+[32m+[m[32m            IBookingSessionUsageService sessionUsageService,[m
+             ILogger<BookingService> logger,[m
+             IOptions<FeatureOptions> featureOptions,[m
+             IValidator<PurchaseTrainingPackageManualRequest> manualValidator,[m
+[36m@@ -52,6 +54,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             _payOsService = payOsService;[m
+             _coachWalletRepository = coachWalletRepository;[m
+             _notificationRepository = notificationRepository;[m
+[32m+[m[32m            _sessionUsageService = sessionUsageService;[m
+             _logger = logger;[m
+             _enableManualPurchase = featureOptions.Value.EnableManualPurchase;[m
+             _manualValidator = manualValidator;[m
+[36m@@ -59,6 +62,27 @@[m [mnamespace SporticoApp.Application.Services[m
+             _filterValidator = filterValidator;[m
+         }[m
+ [m
+[32m+[m[32m        /// <summary>Maps a page of bookings, enriching each with real session usage (one grouped query).</summary>[m
+[32m+[m[32m        private async Task<List<BookingResponse>> MapWithUsageAsync(IReadOnlyCollection<Booking> bookings)[m
+[32m+[m[32m        {[m
+[32m+[m[32m            if (bookings.Count == 0)[m
+[32m+[m[32m            {[m
+[32m+[m[32m                return new List<BookingResponse>();[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            var totals = bookings[m
+[32m+[m[32m                .GroupBy(b => b.Id)[m
+[32m+[m[32m                .ToDictionary(g => g.Key, g => g.First().TotalSessions);[m
+[32m+[m
+[32m+[m[32m            var usageMap = await _sessionUsageService.GetMapAsync(totals);[m
+[32m+[m
+[32m+[m[32m            return bookings[m
+[32m+[m[32m                .Select(b => usageMap.TryGetValue(b.Id, out var usage)[m
+[32m+[m[32m                    ? b.ToResponse(usage)[m
+[32m+[m[32m                    : b.ToResponse())[m
+[32m+[m[32m                .ToList();[m
+[32m+[m[32m        }[m
+[32m+[m
+         public async Task<Result<BookingResponse>> PurchaseManualAsync([m
+             Guid learnerId,[m
+             PurchaseTrainingPackageManualRequest request)[m
+[36m@@ -455,7 +479,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             var (items, totalCount) = await _bookingRepository.GetPagedByLearnerAsync(learnerId, filter);[m
+ [m
+             var response = new PagedResult<BookingResponse>([m
+[31m-                items.Select(x => x.ToResponse()).ToList(),[m
+[32m+[m[32m                await MapWithUsageAsync(items),[m
+                 totalCount,[m
+                 filter.PageNumber,[m
+                 filter.PageSize);[m
+[36m@@ -484,7 +508,8 @@[m [mnamespace SporticoApp.Application.Services[m
+                     "Booking not found");[m
+             }[m
+ [m
+[31m-            return Result<BookingResponse>.Success(booking.ToResponse());[m
+[32m+[m[32m            var usage = await _sessionUsageService.GetAsync(booking.Id, booking.TotalSessions);[m
+[32m+[m[32m            return Result<BookingResponse>.Success(booking.ToResponse(usage));[m
+         }[m
+ [m
+         public async Task<Result<PagedResult<BookingResponse>>> GetCoachBookingsAsync([m
+[36m@@ -507,7 +532,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             var (items, totalCount) = await _bookingRepository.GetPagedByCoachAsync(coachId, filter);[m
+ [m
+             var response = new PagedResult<BookingResponse>([m
+[31m-                items.Select(x => x.ToResponse()).ToList(),[m
+[32m+[m[32m                await MapWithUsageAsync(items),[m
+                 totalCount,[m
+                 filter.PageNumber,[m
+                 filter.PageSize);[m
+[36m@@ -536,7 +561,8 @@[m [mnamespace SporticoApp.Application.Services[m
+                     "Booking not found");[m
+             }[m
+ [m
+[31m-            return Result<BookingResponse>.Success(booking.ToResponse());[m
+[32m+[m[32m            var usage = await _sessionUsageService.GetAsync(booking.Id, booking.TotalSessions);[m
+[32m+[m[32m            return Result<BookingResponse>.Success(booking.ToResponse(usage));[m
+         }[m
+ [m
+         private Booking CreateBookingSnapshot([m
+[1mdiff --git a/src/SporticoApp.Application/Services/TrainingSessionService.cs b/src/SporticoApp.Application/Services/TrainingSessionService.cs[m
+[1mindex 44f373f..c718147 100644[m
+[1m--- a/src/SporticoApp.Application/Services/TrainingSessionService.cs[m
+[1m+++ b/src/SporticoApp.Application/Services/TrainingSessionService.cs[m
+[36m@@ -20,6 +20,7 @@[m [mnamespace SporticoApp.Application.Services[m
+         private readonly ICoachAvailabilityRepository _availabilityRepository;[m
+         private readonly ICoachWalletRepository _coachWalletRepository;[m
+         private readonly INotificationRepository _notificationRepository;[m
+[32m+[m[32m        private readonly IBookingSessionUsageService _sessionUsageService;[m
+         private readonly ILogger<TrainingSessionService> _logger;[m
+         private readonly IValidator<CreateTrainingSessionRequest> _createValidator;[m
+         private readonly IValidator<ConfirmTrainingSessionRequest> _confirmValidator;[m
+[36m@@ -32,6 +33,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             ICoachAvailabilityRepository availabilityRepository,[m
+             ICoachWalletRepository coachWalletRepository,[m
+             INotificationRepository notificationRepository,[m
+[32m+[m[32m            IBookingSessionUsageService sessionUsageService,[m
+             ILogger<TrainingSessionService> logger,[m
+             IValidator<CreateTrainingSessionRequest> createValidator,[m
+             IValidator<ConfirmTrainingSessionRequest> confirmValidator,[m
+[36m@@ -43,6 +45,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             _availabilityRepository = availabilityRepository;[m
+             _coachWalletRepository = coachWalletRepository;[m
+             _notificationRepository = notificationRepository;[m
+[32m+[m[32m            _sessionUsageService = sessionUsageService;[m
+             _logger = logger;[m
+             _createValidator = createValidator;[m
+             _confirmValidator = confirmValidator;[m
+[36m@@ -126,19 +129,13 @@[m [mnamespace SporticoApp.Application.Services[m
+                     "Booking package has expired");[m
+             }[m
+ [m
+[31m-            // ── 3. Session-quota check (requested + scheduled + completed) ────────[m
+[31m-            var countedStatuses = new List<string>[m
+[31m-            {[m
+[31m-                TrainingSessionStatuses.Requested,[m
+[31m-                TrainingSessionStatuses.Scheduled,[m
+[31m-                TrainingSessionStatuses.Completed[m
+[31m-            };[m
+[32m+[m[32m            // ── 3. Session-quota check (shared usage rule, scoped strictly by THIS booking) ──[m
+[32m+[m[32m            // Uses the same BookingSessionUsage logic the booking responses use, so the count the[m
+[32m+[m[32m            // learner sees and the count enforced here can never diverge. A learner who buys a new[m
+[32m+[m[32m            // package gets a fresh booking id → fresh usage → not blocked by an old booking.[m
+[32m+[m[32m            var usage = await _sessionUsageService.GetAsync(booking.Id, booking.TotalSessions);[m
+ [m
+[31m-            var usedSessions = await _trainingSessionRepository.CountByBookingAsync([m
+[31m-                booking.Id,[m
+[31m-                countedStatuses);[m
+[31m-[m
+[31m-            if (usedSessions >= booking.TotalSessions)[m
+[32m+[m[32m            if (!usage.CanBookSession)[m
+             {[m
+                 throw new ConflictException([m
+                     ErrorCodes.SessionLimitExceeded,[m
+[36m@@ -243,8 +240,16 @@[m [mnamespace SporticoApp.Application.Services[m
+             slot.UpdatedAt = DateTime.UtcNow;[m
+             slot.Version++; // optimistic concurrency: collide with any concurrent booking of this slot[m
+ [m
+[31m-            // Session insert + slot update share the one scoped DbContext, so this single[m
+[31m-            // SaveChanges persists both atomically (and asserts the slot Version token).[m
+[32m+[m[32m            // Bump the booking's optimistic concurrency token so two concurrent create-session[m
+[32m+[m[32m            // requests for the SAME booking cannot both pass the quota check and exceed TotalSessions:[m
+[32m+[m[32m            // both read version=N, both write version=N+1 asserting WHERE version=N — the second[m
+[32m+[m[32m            // SaveChanges raises a concurrency conflict (surfaced as 409) and the learner retries[m
+[32m+[m[32m            // against the up-to-date usage.[m
+[32m+[m[32m            booking.Version++;[m
+[32m+[m[32m            booking.UpdatedAt = DateTime.UtcNow;[m
+[32m+[m
+[32m+[m[32m            // Session insert + slot update + booking version bump share the one scoped DbContext, so[m
+[32m+[m[32m            // this single SaveChanges persists all atomically (and asserts both Version tokens).[m
+             await _trainingSessionRepository.AddAsync(session);[m
+ [m
+             // Side effect only — must not fail the already-committed session creation.[m
+[36m@@ -523,7 +528,14 @@[m [mnamespace SporticoApp.Application.Services[m
+                     "Booking not found");[m
+             }[m
+ [m
+[31m-            booking.CompletedSessions += 1;[m
+[32m+[m[32m            // Re-sync the denormalized counter to the REAL completed count rather than blindly[m
+[32m+[m[32m            // incrementing — this self-heals any historical drift and stays consistent with the[m
+[32m+[m[32m            // usage that booking responses report. The DB count excludes this session (not yet[m
+[32m+[m[32m            // saved), so the new authoritative total is (committed completed) + 1.[m
+[32m+[m[32m            var completedInDb = await _trainingSessionRepository.CountByBookingAsync([m
+[32m+[m[32m                booking.Id,[m
+[32m+[m[32m                new List<string> { TrainingSessionStatuses.Completed });[m
+[32m+[m[32m            booking.CompletedSessions = completedInDb + 1;[m
+ [m
+             var wallet = await _coachWalletRepository.GetByCoachIdForUpdateAsync(booking.CoachId);[m
+             if (wallet == null)[m
+[1mdiff --git a/src/SporticoApp.Application/Services/WithdrawalService.cs b/src/SporticoApp.Application/Services/WithdrawalService.cs[m
+[1mindex 465c267..29d5d8e 100644[m
+[1m--- a/src/SporticoApp.Application/Services/WithdrawalService.cs[m
+[1m+++ b/src/SporticoApp.Application/Services/WithdrawalService.cs[m
+[36m@@ -10,6 +10,7 @@[m [musing SporticoApp.Application.Options;[m
+ using SporticoApp.Core.Entities;[m
+ using SporticoApp.Shared.Constants;[m
+ using SporticoApp.Shared.Exceptions;[m
+[32m+[m[32musing SporticoApp.Shared.Payments;[m
+ using SporticoApp.Shared.Responses;[m
+ [m
+ namespace SporticoApp.Application.Services[m
+[36m@@ -557,7 +558,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             withdrawal.PayOsPayoutStatus = detailResponse.Data?.State;[m
+             withdrawal.UpdatedAt = DateTime.UtcNow;[m
+ [m
+[31m-            switch (ClassifyPayoutState(detailResponse.Data?.State))[m
+[32m+[m[32m            switch (PayoutStatus.Classify(detailResponse.Data?.State))[m
+             {[m
+                 case PayoutOutcome.Success:[m
+                 {[m
+[36m@@ -763,7 +764,7 @@[m [mnamespace SporticoApp.Application.Services[m
+             withdrawal.PayOsPayoutId = payosResponse.Data?.Id;[m
+             withdrawal.ProcessingAt = DateTime.UtcNow;[m
+ [m
+[31m-            switch (ClassifyPayoutState(payosResponse.Data?.State))[m
+[32m+[m[32m            switch (PayoutStatus.Classify(payosResponse.Data?.State))[m
+             {[m
+                 case PayoutOutcome.Success:[m
+                     await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);[m
+[36m@@ -870,26 +871,6 @@[m [mnamespace SporticoApp.Application.Services[m
+                 $"Your withdrawal could not be processed: {reason}");[m
+         }[m
+ [m
+[31m-        private enum PayoutOutcome { Success, Processing, Failed }[m
+[31m-[m
+[31m-        /// <summary>[m
+[31m-        /// Normalizes the PayOS payout state defensively. PayOS documents PROCESSING | SUCCESS |[m
+[31m-        /// FAILED | CANCELLED, but we accept common spelling variants and treat any unknown state[m
+[31m-        /// as "processing" (keep funds reserved) rather than finalizing or rolling back blindly.[m
+[31m-        /// </summary>[m
+[31m-        private static PayoutOutcome ClassifyPayoutState(string? state)[m
+[31m-        {[m
+[31m-            var s = (state ?? string.Empty).Trim().ToUpperInvariant();[m
+[31m-            return s switch[m
+[31m-            {[m
+[31m-                "SUCCESS" or "SUCCEEDED" or "SUCCEED" or "PAID" or "COMPLETED" or "COMPLETE" or "DONE"[m
+[31m-                    => PayoutOutcome.Success,[m
+[31m-                "FAILED" or "FAIL" or "CANCELLED" or "CANCELED" or "REJECTED" or "REJECT" or "ERROR"[m
+[31m-                    => PayoutOutcome.Failed,[m
+[31m-                _ => PayoutOutcome.Processing, // PROCESSING, PENDING, unknown → stay reserved[m
+[31m-            };[m
+[31m-        }[m
+[31m-[m
+         /// <summary>[m
+         /// Converts a wallet amount (decimal VND) into the integer VND value the PayOS payout API[m
+         /// expects. VND has no minor units, so the amount must be a whole, positive number that fits[m
+[1mdiff --git a/src/SporticoApp.Core/Entities/Booking.cs b/src/SporticoApp.Core/Entities/Booking.cs[m
+[1mindex 606a444..b5ba936 100644[m
+[1m--- a/src/SporticoApp.Core/Entities/Booking.cs[m
+[1m+++ b/src/SporticoApp.Core/Entities/Booking.cs[m
+[36m@@ -48,6 +48,13 @@[m [mpublic partial class Booking[m
+ [m
+     public DateTime UpdatedAt { get; set; }[m
+ [m
+[32m+[m[32m    /// <summary>[m
+[32m+[m[32m    /// Application-managed optimistic concurrency token, bumped whenever a training session is[m
+[32m+[m[32m    /// created against this booking (and on completion). Prevents two concurrent create-session[m
+[32m+[m[32m    /// requests from both passing the quota check and exceeding TotalSessions.[m
+[32m+[m[32m    /// </summary>[m
+[32m+[m[32m    public int Version { get; set; }[m
+[32m+[m
+     public virtual User Learner { get; set; } = null!;[m
+ [m
+     public virtual CoachProfile Coach { get; set; } = null!;[m
+[1mdiff --git a/src/SporticoApp.Infrastructure/Migrations/AppDbContextModelSnapshot.cs b/src/SporticoApp.Infrastructure/Migrations/AppDbContextModelSnapshot.cs[m
+[1mindex 20468a3..fc1bb2f 100644[m
+[1m--- a/src/SporticoApp.Infrastructure/Migrations/AppDbContextModelSnapshot.cs[m
+[1m+++ b/src/SporticoApp.Infrastructure/Migrations/AppDbContextModelSnapshot.cs[m
+[36m@@ -120,6 +120,13 @@[m [mnamespace SporticoApp.Infrastructure.Migrations[m
+                         .HasColumnName("updated_at")[m
+                         .HasDefaultValueSql("now()");[m
+ [m
+[32m+[m[32m                    b.Property<int>("Version")[m
+[32m+[m[32m                        .IsConcurrencyToken()[m
+[32m+[m[32m                        .ValueGeneratedOnAdd()[m
+[32m+[m[32m                        .HasColumnType("integer")[m
+[32m+[m[32m                        .HasDefaultValue(0)[m
+[32m+[m[32m                        .HasColumnName("version");[m
+[32m+[m
+                     b.HasKey("Id")[m
+                         .HasName("bookings_pkey");[m
+ [m
+[1mdiff --git a/src/SporticoApp.Infrastructure/Persistence/Configurations/BookingConfiguration.cs b/src/SporticoApp.Infrastructure/Persistence/Configurations/BookingConfiguration.cs[m
+[1mindex fc79cf9..3462ac9 100644[m
+[1m--- a/src/SporticoApp.Infrastructure/Persistence/Configurations/BookingConfiguration.cs[m
+[1m+++ b/src/SporticoApp.Infrastructure/Persistence/Configurations/BookingConfiguration.cs[m
+[36m@@ -34,6 +34,13 @@[m [mpublic sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>[m
+         builder.Property(e => e.TotalSessions).HasDefaultValue(0);[m
+         builder.Property(e => e.ExpiresAt).IsRequired(false);[m
+ [m
+[32m+[m[32m        // Optimistic concurrency token (same pattern as CoachWallet/CoachAvailabilitySlot): EF adds[m
+[32m+[m[32m        // `WHERE version = @old` to every UPDATE, so two concurrent create-session requests for the[m
+[32m+[m[32m        // same booking cannot both succeed and overshoot TotalSessions.[m
+[32m+[m[32m        builder.Property(e => e.Version)[m
+[32m+[m[32m            .IsConcurrencyToken()[m
+[32m+[m[32m            .HasDefaultValue(0);[m
+[32m+[m
+         builder.HasOne(d => d.Learner)[m
+             .WithMany(p => p.BookingsAsLearner)[m
+             .HasForeignKey(d => d.LearnerId)[m
+[1mdiff --git a/src/SporticoApp.Infrastructure/Persistence/Repositories/TrainingSessionRepository.cs b/src/SporticoApp.Infrastructure/Persistence/Repositories/TrainingSessionRepository.cs[m
+[1mindex b4edf9a..8565222 100644[m
+[1m--- a/src/SporticoApp.Infrastructure/Persistence/Repositories/TrainingSessionRepository.cs[m
+[1m+++ b/src/SporticoApp.Infrastructure/Persistence/Repositories/TrainingSessionRepository.cs[m
+[36m@@ -58,6 +58,40 @@[m [mnamespace SporticoApp.Infrastructure.Persistence.Repositories[m
+                 .CountAsync();[m
+         }[m
+ [m
+[32m+[m[32m        public async Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId)[m
+[32m+[m[32m        {[m
+[32m+[m[32m            var rows = await _context.TrainingSessions[m
+[32m+[m[32m                .AsNoTracking()[m
+[32m+[m[32m                .Where(x => x.BookingId == bookingId)[m
+[32m+[m[32m                .GroupBy(x => x.Status)[m
+[32m+[m[32m                .Select(g => new { Status = g.Key, Count = g.Count() })[m
+[32m+[m[32m                .ToListAsync();[m
+[32m+[m
+[32m+[m[32m            return rows.ToDictionary(r => r.Status, r => r.Count);[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        public async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync([m
+[32m+[m[32m            IReadOnlyCollection<Guid> bookingIds)[m
+[32m+[m[32m        {[m
+[32m+[m[32m            if (bookingIds.Count == 0)[m
+[32m+[m[32m            {[m
+[32m+[m[32m                return new Dictionary<Guid, IReadOnlyDictionary<string, int>>();[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            var rows = await _context.TrainingSessions[m
+[32m+[m[32m                .AsNoTracking()[m
+[32m+[m[32m                .Where(x => bookingIds.Contains(x.BookingId))[m
+[32m+[m[32m                .GroupBy(x => new { x.BookingId, x.Status })[m
+[32m+[m[32m                .Select(g => new { g.Key.BookingId, g.Key.Status, Count = g.Count() })[m
+[32m+[m[32m                .ToListAsync();[m
+[32m+[m
+[32m+[m[32m            return rows[m
+[32m+[m[32m                .GroupBy(r => r.BookingId)[m
+[32m+[m[32m                .ToDictionary([m
+[32m+[m[32m                    g => g.Key,[m
+[32m+[m[32m                    g => (IReadOnlyDictionary<string, int>)g.ToDictionary(r => r.Status, r => r.Count));[m
+[32m+[m[32m        }[m
+[32m+[m
+         public async Task<int> CountActiveByAvailabilitySlotIdAsync([m
+             Guid slotId,[m
+             IEnumerable<string> statuses,[m
+[1mdiff --git a/src/SporticoApp.Infrastructure/Services/Payments/PayOsPayoutService.cs b/src/SporticoApp.Infrastructure/Services/Payments/PayOsPayoutService.cs[m
+[1mindex 5b888a1..e9180f0 100644[m
+[1m--- a/src/SporticoApp.Infrastructure/Services/Payments/PayOsPayoutService.cs[m
+[1m+++ b/src/SporticoApp.Infrastructure/Services/Payments/PayOsPayoutService.cs[m
+[36m@@ -289,6 +289,28 @@[m [mnamespace SporticoApp.Infrastructure.Services.Payments[m
+             else if (data.TryGetProperty("status", out var status))[m
+                 result.State = status.GetString() ?? string.Empty;[m
+ [m
+[32m+[m[32m            // Batch payouts (id like "batch_…") may nest the outcome inside a transactions array[m
+[32m+[m[32m            // rather than exposing a top-level state/status. Fall back to the first transaction's[m
+[32m+[m[32m            // state/status so the withdrawal can still be reconciled to a terminal outcome.[m
+[32m+[m[32m            if (string.IsNullOrWhiteSpace(result.State) &&[m
+[32m+[m[32m                data.TryGetProperty("transactions", out var txns) &&[m
+[32m+[m[32m                txns.ValueKind == JsonValueKind.Array)[m
+[32m+[m[32m            {[m
+[32m+[m[32m                foreach (var txn in txns.EnumerateArray())[m
+[32m+[m[32m                {[m
+[32m+[m[32m                    if (txn.ValueKind != JsonValueKind.Object)[m
+[32m+[m[32m                        continue;[m
+[32m+[m
+[32m+[m[32m                    if (txn.TryGetProperty("state", out var txnState))[m
+[32m+[m[32m                        result.State = txnState.GetString() ?? string.Empty;[m
+[32m+[m[32m                    else if (txn.TryGetProperty("status", out var txnStatus))[m
+[32m+[m[32m                        result.State = txnStatus.GetString() ?? string.Empty;[m
+[32m+[m
+[32m+[m[32m                    if (!string.IsNullOrWhiteSpace(result.State))[m
+[32m+[m[32m                        break;[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+[32m+[m
+             if (data.TryGetProperty("toBin", out var toBin))[m
+                 result.ToBin = toBin.GetString();[m
+ [m
+[1mdiff --git a/tests/SporticoApp.Application.Tests/Availability/CoachAvailabilityServiceTests.cs b/tests/SporticoApp.Application.Tests/Availability/CoachAvailabilityServiceTests.cs[m
+[1mindex 6f9c0e2..8bd39da 100644[m
+[1m--- a/tests/SporticoApp.Application.Tests/Availability/CoachAvailabilityServiceTests.cs[m
+[1m+++ b/tests/SporticoApp.Application.Tests/Availability/CoachAvailabilityServiceTests.cs[m
+[36m@@ -164,6 +164,8 @@[m [mpublic class CoachAvailabilityServiceTests[m
+             => Task.FromResult<IReadOnlyDictionary<Guid, int>>(Counts);[m
+ [m
+         public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => throw new NotImplementedException();[m
+[32m+[m[32m        public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId) => throw new NotImplementedException();[m
+[32m+[m[32m        public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds) => throw new NotImplementedException();[m
+         public Task<bool> HasOverlapAsync(Guid userId, DateTime s, DateTime e, List<string> st) => throw new NotImplementedException();[m
+         public Task<TrainingSession?> GetByIdAsync(Guid id) => throw new NotImplementedException();[m
+         public Task<TrainingSession?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();[m
+[1mdiff --git a/tests/SporticoApp.Application.Tests/Payments/BookingPaymentFlowTests.cs b/tests/SporticoApp.Application.Tests/Payments/BookingPaymentFlowTests.cs[m
+[1mindex 0066d57..abd479e 100644[m
+[1m--- a/tests/SporticoApp.Application.Tests/Payments/BookingPaymentFlowTests.cs[m
+[1m+++ b/tests/SporticoApp.Application.Tests/Payments/BookingPaymentFlowTests.cs[m
+[36m@@ -87,6 +87,7 @@[m [mpublic class BookingPaymentFlowTests[m
+             payos,[m
+             wallets,[m
+             notifications,[m
+[32m+[m[32m            new FakeBookingSessionUsageService(),[m
+             Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,[m
+             Microsoft.Extensions.Options.Options.Create(new SporticoApp.Application.Options.FeatureOptions { EnableManualPurchase = true }),[m
+             new PassValidator<PurchaseTrainingPackageManualRequest>(),[m
+[36m@@ -136,6 +137,7 @@[m [mpublic class BookingPaymentFlowTests[m
+             new FakePayOsService(),[m
+             new FakeCoachWalletRepository(),[m
+             new FakeNotificationRepository(),[m
+[32m+[m[32m            new FakeBookingSessionUsageService(),[m
+             Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,[m
+             Microsoft.Extensions.Options.Options.Create(new SporticoApp.Application.Options.FeatureOptions { EnableManualPurchase = true }),[m
+             new PassValidator<PurchaseTrainingPackageManualRequest>(),[m
+[1mdiff --git a/tests/SporticoApp.Application.Tests/Payments/ManualPurchaseGuardTests.cs b/tests/SporticoApp.Application.Tests/Payments/ManualPurchaseGuardTests.cs[m
+[1mindex 40df20b..73c3e8e 100644[m
+[1m--- a/tests/SporticoApp.Application.Tests/Payments/ManualPurchaseGuardTests.cs[m
+[1m+++ b/tests/SporticoApp.Application.Tests/Payments/ManualPurchaseGuardTests.cs[m
+[36m@@ -40,6 +40,7 @@[m [mpublic class ManualPurchaseGuardTests[m
+             new FakePayOsService(),[m
+             new FakeCoachWalletRepository(),[m
+             new FakeNotificationRepository(),[m
+[32m+[m[32m            new FakeBookingSessionUsageService(),[m
+             NullLogger<BookingService>.Instance,[m
+             Microsoft.Extensions.Options.Options.Create(new FeatureOptions { EnableManualPurchase = enableManual }),[m
+             new PassValidator<PurchaseTrainingPackageManualRequest>(),[m
+[1mdiff --git a/tests/SporticoApp.Application.Tests/Payments/PaymentTestFakes.cs b/tests/SporticoApp.Application.Tests/Payments/PaymentTestFakes.cs[m
+[1mindex 4d8be84..9eb39e3 100644[m
+[1m--- a/tests/SporticoApp.Application.Tests/Payments/PaymentTestFakes.cs[m
+[1m+++ b/tests/SporticoApp.Application.Tests/Payments/PaymentTestFakes.cs[m
+[36m@@ -14,6 +14,25 @@[m [minternal sealed class PassValidator<T> : AbstractValidator<T>[m
+ {[m
+ }[m
+ [m
+[32m+[m[32m/// <summary>[m
+[32m+[m[32m/// Trivial booking-session-usage stub for tests that don't exercise booking listing/detail[m
+[32m+[m[32m/// (e.g. purchase-flow tests). Reports the booking's total as fully available.[m
+[32m+[m[32m/// </summary>[m
+[32m+[m[32minternal sealed class FakeBookingSessionUsageService[m
+[32m+[m[32m    : SporticoApp.Application.Interfaces.Services.IBookingSessionUsageService[m
+[32m+[m[32m{[m
+[32m+[m[32m    public Task<SporticoApp.Application.DTOs.Bookings.BookingSessionUsage> GetAsync(Guid bookingId, int totalSessions)[m
+[32m+[m[32m        => Task.FromResult(SporticoApp.Application.DTOs.Bookings.BookingSessionUsage.From([m
+[32m+[m[32m            totalSessions, new Dictionary<string, int>()));[m
+[32m+[m
+[32m+[m[32m    public Task<IReadOnlyDictionary<Guid, SporticoApp.Application.DTOs.Bookings.BookingSessionUsage>> GetMapAsync([m
+[32m+[m[32m        IReadOnlyDictionary<Guid, int> bookingTotals)[m
+[32m+[m[32m        => Task.FromResult<IReadOnlyDictionary<Guid, SporticoApp.Application.DTOs.Bookings.BookingSessionUsage>>([m
+[32m+[m[32m            bookingTotals.ToDictionary([m
+[32m+[m[32m                kv => kv.Key,[m
+[32m+[m[32m                kv => SporticoApp.Application.DTOs.Bookings.BookingSessionUsage.From(kv.Value, new Dictionary<string, int>())));[m
+[32m+[m[32m}[m
+[32m+[m
+ internal sealed class FakeBookingRepository : IBookingRepository[m
+ {[m
+     public Booking? Stored;[m
+[1mdiff --git a/tests/SporticoApp.Application.Tests/Payments/PlatformFeeMathTests.cs b/tests/SporticoApp.Application.Tests/Payments/PlatformFeeMathTests.cs[m
+[1mindex 8b5cc34..0c305a6 100644[m
+[1m--- a/tests/SporticoApp.Application.Tests/Payments/PlatformFeeMathTests.cs[m
+[1m+++ b/tests/SporticoApp.Application.Tests/Payments/PlatformFeeMathTests.cs[m
+[36m@@ -36,6 +36,7 @@[m [mpublic class PlatformFeeMathTests[m
+             new FakePayOsService(),[m
+             new FakeCoachWalletRepository(),[m
+             new FakeNotificationRepository(),[m
+[32m+[m[32m            new FakeBookingSessionUsageService(),[m
+             NullLogger<BookingService>.Instance,[m
+             Microsoft.Extensions.Options.Options.Create(new FeatureOptions { EnableManualPurchase = true }),[m
+             new PassValidator<PurchaseTrainingPackageManualRequest>(),[m
+[1mdiff --git a/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionCreateTests.cs b/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionCreateTests.cs[m
+[1mindex 7a98be2..f5b9b2f 100644[m
+[1m--- a/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionCreateTests.cs[m
+[1m+++ b/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionCreateTests.cs[m
+[36m@@ -71,6 +71,7 @@[m [mpublic class TrainingSessionCreateTests[m
+             new FakeAvail(slot),[m
+             new FakeWallet(),[m
+             new FakeNotif(),[m
+[32m+[m[32m            new BookingSessionUsageService(ts),[m
+             NullLogger<TrainingSessionService>.Instance,[m
+             new PassValidator<CreateTrainingSessionRequest>(),[m
+             new PassValidator<ConfirmTrainingSessionRequest>(),[m
+[36m@@ -237,6 +238,14 @@[m [mpublic class TrainingSessionCreateTests[m
+         public TrainingSession? Added;[m
+ [m
+         public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(UsedCount);[m
+[32m+[m[32m        // Quota usage now flows through GetStatusCounts*: model UsedCount as 'scheduled' sessions.[m
+[32m+[m[32m        public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId)[m
+[32m+[m[32m            => Task.FromResult<IReadOnlyDictionary<string, int>>([m
+[32m+[m[32m                UsedCount > 0[m
+[32m+[m[32m                    ? new Dictionary<string, int> { [TrainingSessionStatuses.Scheduled] = UsedCount }[m
+[32m+[m[32m                    : new Dictionary<string, int>());[m
+[32m+[m[32m        public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds)[m
+[32m+[m[32m            => Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>>(new Dictionary<Guid, IReadOnlyDictionary<string, int>>());[m
+         public Task<int> CountActiveByAvailabilitySlotIdAsync(Guid slotId, IEnumerable<string> statuses, Guid? excludeSessionId = null)[m
+             => Task.FromResult(ActiveSlotCount);[m
+         public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses)[m
+[1mdiff --git a/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionServiceTests.cs b/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionServiceTests.cs[m
+[1mindex dde5284..1ba48cf 100644[m
+[1m--- a/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionServiceTests.cs[m
+[1m+++ b/tests/SporticoApp.Application.Tests/TrainingSessions/TrainingSessionServiceTests.cs[m
+[36m@@ -34,6 +34,7 @@[m [mpublic class TrainingSessionServiceTests[m
+             avail ?? new FakeAvailRepo(),[m
+             wallet ?? new FakeWalletRepo(),[m
+             notif,[m
+[32m+[m[32m            new BookingSessionUsageService(ts),[m
+             NullLogger<TrainingSessionService>.Instance,[m
+             new PassValidator<CreateTrainingSessionRequest>(),[m
+             new PassValidator<ConfirmTrainingSessionRequest>(),[m
+[36m@@ -235,7 +236,12 @@[m [mpublic class TrainingSessionServiceTests[m
+             => Task.FromResult(Session != null && Session.Id == id ? Session : null);[m
+         public Task SaveChangesAsync() { SaveCount++; return Task.CompletedTask; }[m
+         public Task AddAsync(TrainingSession session) { Session ??= session; SaveCount++; return Task.CompletedTask; }[m
+[31m-        public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(0);[m
+[32m+[m[32m        public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(CompletedInDbCount);[m
+[32m+[m[32m        public int CompletedInDbCount; // committed completed sessions (for CompleteAsync self-heal)[m
+[32m+[m[32m        public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId)[m
+[32m+[m[32m            => Task.FromResult<IReadOnlyDictionary<string, int>>(new Dictionary<string, int>());[m
+[32m+[m[32m        public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds)[m
+[32m+[m[32m            => Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>>(new Dictionary<Guid, IReadOnlyDictionary<string, int>>());[m
+         public Task<int> CountActiveByAvailabilitySlotIdAsync(Guid slotId, IEnumerable<string> statuses, Guid? excludeSessionId = null)[m
+             => Task.FromResult(ActiveSlotCount);[m
+         public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses)[m

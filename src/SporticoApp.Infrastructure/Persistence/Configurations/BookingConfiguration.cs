@@ -34,6 +34,13 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(e => e.TotalSessions).HasDefaultValue(0);
         builder.Property(e => e.ExpiresAt).IsRequired(false);
 
+        // Optimistic concurrency token (same pattern as CoachWallet/CoachAvailabilitySlot): EF adds
+        // `WHERE version = @old` to every UPDATE, so two concurrent create-session requests for the
+        // same booking cannot both succeed and overshoot TotalSessions.
+        builder.Property(e => e.Version)
+            .IsConcurrencyToken()
+            .HasDefaultValue(0);
+
         builder.HasOne(d => d.Learner)
             .WithMany(p => p.BookingsAsLearner)
             .HasForeignKey(d => d.LearnerId)

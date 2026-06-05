@@ -14,6 +14,25 @@ internal sealed class PassValidator<T> : AbstractValidator<T>
 {
 }
 
+/// <summary>
+/// Trivial booking-session-usage stub for tests that don't exercise booking listing/detail
+/// (e.g. purchase-flow tests). Reports the booking's total as fully available.
+/// </summary>
+internal sealed class FakeBookingSessionUsageService
+    : SporticoApp.Application.Interfaces.Services.IBookingSessionUsageService
+{
+    public Task<SporticoApp.Application.DTOs.Bookings.BookingSessionUsage> GetAsync(Guid bookingId, int totalSessions)
+        => Task.FromResult(SporticoApp.Application.DTOs.Bookings.BookingSessionUsage.From(
+            totalSessions, new Dictionary<string, int>()));
+
+    public Task<IReadOnlyDictionary<Guid, SporticoApp.Application.DTOs.Bookings.BookingSessionUsage>> GetMapAsync(
+        IReadOnlyDictionary<Guid, int> bookingTotals)
+        => Task.FromResult<IReadOnlyDictionary<Guid, SporticoApp.Application.DTOs.Bookings.BookingSessionUsage>>(
+            bookingTotals.ToDictionary(
+                kv => kv.Key,
+                kv => SporticoApp.Application.DTOs.Bookings.BookingSessionUsage.From(kv.Value, new Dictionary<string, int>())));
+}
+
 internal sealed class FakeBookingRepository : IBookingRepository
 {
     public Booking? Stored;

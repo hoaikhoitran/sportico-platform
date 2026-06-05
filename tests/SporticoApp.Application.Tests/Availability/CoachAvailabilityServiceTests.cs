@@ -164,6 +164,8 @@ public class CoachAvailabilityServiceTests
             => Task.FromResult<IReadOnlyDictionary<Guid, int>>(Counts);
 
         public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => throw new NotImplementedException();
+        public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId) => throw new NotImplementedException();
+        public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds) => throw new NotImplementedException();
         public Task<bool> HasOverlapAsync(Guid userId, DateTime s, DateTime e, List<string> st) => throw new NotImplementedException();
         public Task<TrainingSession?> GetByIdAsync(Guid id) => throw new NotImplementedException();
         public Task<TrainingSession?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();

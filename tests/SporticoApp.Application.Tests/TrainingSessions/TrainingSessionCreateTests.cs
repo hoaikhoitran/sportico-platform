@@ -71,6 +71,7 @@ public class TrainingSessionCreateTests
             new FakeAvail(slot),
             new FakeWallet(),
             new FakeNotif(),
+            new BookingSessionUsageService(ts),
             NullLogger<TrainingSessionService>.Instance,
             new PassValidator<CreateTrainingSessionRequest>(),
             new PassValidator<ConfirmTrainingSessionRequest>(),
@@ -237,6 +238,14 @@ public class TrainingSessionCreateTests
         public TrainingSession? Added;
 
         public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(UsedCount);
+        // Quota usage now flows through GetStatusCounts*: model UsedCount as 'scheduled' sessions.
+        public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId)
+            => Task.FromResult<IReadOnlyDictionary<string, int>>(
+                UsedCount > 0
+                    ? new Dictionary<string, int> { [TrainingSessionStatuses.Scheduled] = UsedCount }
+                    : new Dictionary<string, int>());
+        public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds)
+            => Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>>(new Dictionary<Guid, IReadOnlyDictionary<string, int>>());
         public Task<int> CountActiveByAvailabilitySlotIdAsync(Guid slotId, IEnumerable<string> statuses, Guid? excludeSessionId = null)
             => Task.FromResult(ActiveSlotCount);
         public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses)

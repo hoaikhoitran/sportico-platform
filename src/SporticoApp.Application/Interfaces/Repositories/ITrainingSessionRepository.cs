@@ -15,6 +15,16 @@ namespace SporticoApp.Application.Interfaces.Repositories
 
         Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses);
 
+        /// <summary>Session counts grouped by status for one booking (only non-zero statuses present).</summary>
+        Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId);
+
+        /// <summary>
+        /// Session counts grouped by (booking, status) for many bookings in one query (avoids N+1).
+        /// Outer key = bookingId; inner = status→count (only non-zero present; absent booking = no sessions).
+        /// </summary>
+        Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(
+            IReadOnlyCollection<Guid> bookingIds);
+
         /// <summary>
         /// Counts active (capacity-occupying) sessions on one availability slot. Optionally excludes a
         /// session id (used during cancellation to count the OTHER active sessions).

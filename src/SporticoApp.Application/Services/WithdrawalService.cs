@@ -10,6 +10,7 @@ using SporticoApp.Application.Options;
 using SporticoApp.Core.Entities;
 using SporticoApp.Shared.Constants;
 using SporticoApp.Shared.Exceptions;
+using SporticoApp.Shared.Payments;
 using SporticoApp.Shared.Responses;
 
 namespace SporticoApp.Application.Services
@@ -557,7 +558,7 @@ namespace SporticoApp.Application.Services
             withdrawal.PayOsPayoutStatus = detailResponse.Data?.State;
             withdrawal.UpdatedAt = DateTime.UtcNow;
 
-            switch (ClassifyPayoutState(detailResponse.Data?.State))
+            switch (PayoutStatus.Classify(detailResponse.Data?.State))
             {
                 case PayoutOutcome.Success:
                 {
@@ -763,7 +764,7 @@ namespace SporticoApp.Application.Services
             withdrawal.PayOsPayoutId = payosResponse.Data?.Id;
             withdrawal.ProcessingAt = DateTime.UtcNow;
 
-            switch (ClassifyPayoutState(payosResponse.Data?.State))
+            switch (PayoutStatus.Classify(payosResponse.Data?.State))
             {
                 case PayoutOutcome.Success:
                     await FinalizeWithdrawalAsPaidAsync(withdrawal, wallet, adminUserId: null);
@@ -868,26 +869,6 @@ namespace SporticoApp.Application.Services
             await NotifyCoachAsync(withdrawal,
                 "Withdrawal failed",
                 $"Your withdrawal could not be processed: {reason}");
-        }
-
-        private enum PayoutOutcome { Success, Processing, Failed }
-
-        /// <summary>
-        /// Normalizes the PayOS payout state defensively. PayOS documents PROCESSING | SUCCESS |
-        /// FAILED | CANCELLED, but we accept common spelling variants and treat any unknown state
-        /// as "processing" (keep funds reserved) rather than finalizing or rolling back blindly.
-        /// </summary>
-        private static PayoutOutcome ClassifyPayoutState(string? state)
-        {
-            var s = (state ?? string.Empty).Trim().ToUpperInvariant();
-            return s switch
-            {
-                "SUCCESS" or "SUCCEEDED" or "SUCCEED" or "PAID" or "COMPLETED" or "COMPLETE" or "DONE"
-                    => PayoutOutcome.Success,
-                "FAILED" or "FAIL" or "CANCELLED" or "CANCELED" or "REJECTED" or "REJECT" or "ERROR"
-                    => PayoutOutcome.Failed,
-                _ => PayoutOutcome.Processing, // PROCESSING, PENDING, unknown → stay reserved
-            };
         }
 
         /// <summary>

@@ -58,6 +58,40 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .CountAsync();
         }
 
+        public async Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId)
+        {
+            var rows = await _context.TrainingSessions
+                .AsNoTracking()
+                .Where(x => x.BookingId == bookingId)
+                .GroupBy(x => x.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            return rows.ToDictionary(r => r.Status, r => r.Count);
+        }
+
+        public async Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(
+            IReadOnlyCollection<Guid> bookingIds)
+        {
+            if (bookingIds.Count == 0)
+            {
+                return new Dictionary<Guid, IReadOnlyDictionary<string, int>>();
+            }
+
+            var rows = await _context.TrainingSessions
+                .AsNoTracking()
+                .Where(x => bookingIds.Contains(x.BookingId))
+                .GroupBy(x => new { x.BookingId, x.Status })
+                .Select(g => new { g.Key.BookingId, g.Key.Status, Count = g.Count() })
+                .ToListAsync();
+
+            return rows
+                .GroupBy(r => r.BookingId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyDictionary<string, int>)g.ToDictionary(r => r.Status, r => r.Count));
+        }
+
         public async Task<int> CountActiveByAvailabilitySlotIdAsync(
             Guid slotId,
             IEnumerable<string> statuses,

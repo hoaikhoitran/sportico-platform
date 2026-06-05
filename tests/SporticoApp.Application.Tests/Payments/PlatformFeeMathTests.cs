@@ -36,6 +36,7 @@ public class PlatformFeeMathTests
             new FakePayOsService(),
             new FakeCoachWalletRepository(),
             new FakeNotificationRepository(),
+            new FakeBookingSessionUsageService(),
             NullLogger<BookingService>.Instance,
             Microsoft.Extensions.Options.Options.Create(new FeatureOptions { EnableManualPurchase = true }),
             new PassValidator<PurchaseTrainingPackageManualRequest>(),

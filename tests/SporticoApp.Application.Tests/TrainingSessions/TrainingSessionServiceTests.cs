@@ -34,6 +34,7 @@ public class TrainingSessionServiceTests
             avail ?? new FakeAvailRepo(),
             wallet ?? new FakeWalletRepo(),
             notif,
+            new BookingSessionUsageService(ts),
             NullLogger<TrainingSessionService>.Instance,
             new PassValidator<CreateTrainingSessionRequest>(),
             new PassValidator<ConfirmTrainingSessionRequest>(),
@@ -235,7 +236,12 @@ public class TrainingSessionServiceTests
             => Task.FromResult(Session != null && Session.Id == id ? Session : null);
         public Task SaveChangesAsync() { SaveCount++; return Task.CompletedTask; }
         public Task AddAsync(TrainingSession session) { Session ??= session; SaveCount++; return Task.CompletedTask; }
-        public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(0);
+        public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => Task.FromResult(CompletedInDbCount);
+        public int CompletedInDbCount; // committed completed sessions (for CompleteAsync self-heal)
+        public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId)
+            => Task.FromResult<IReadOnlyDictionary<string, int>>(new Dictionary<string, int>());
+        public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds)
+            => Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>>(new Dictionary<Guid, IReadOnlyDictionary<string, int>>());
         public Task<int> CountActiveByAvailabilitySlotIdAsync(Guid slotId, IEnumerable<string> statuses, Guid? excludeSessionId = null)
             => Task.FromResult(ActiveSlotCount);
         public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses)

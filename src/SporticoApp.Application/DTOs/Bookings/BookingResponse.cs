@@ -24,7 +24,23 @@ namespace SporticoApp.Application.DTOs.Bookings
 
         public int TotalSessions { get; set; }
 
+        /// <summary>Sessions actually completed (real count from TrainingSession rows).</summary>
         public int CompletedSessions { get; set; }
+
+        /// <summary>
+        /// Sessions consuming a quota slot: requested + scheduled + completed + missed
+        /// (cancelled excluded). This — not CompletedSessions — governs whether more can be booked.
+        /// </summary>
+        public int UsedSessions { get; set; }
+
+        /// <summary>Remaining bookable slots = max(0, TotalSessions − UsedSessions).</summary>
+        public int RemainingSessions { get; set; }
+
+        /// <summary>True when the package still has a free slot (RemainingSessions &gt; 0).</summary>
+        public bool CanBookSession { get; set; }
+
+        /// <summary>Raw count per session status (only non-zero statuses present).</summary>
+        public IReadOnlyDictionary<string, int>? SessionCountsByStatus { get; set; }
 
         public string Status { get; set; } = string.Empty;
 

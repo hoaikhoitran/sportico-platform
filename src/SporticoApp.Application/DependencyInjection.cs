@@ -24,6 +24,7 @@ namespace SporticoApp.Application
             services.AddScoped<IAdminTrainingPackageService, AdminTrainingPackageService>();
             services.AddScoped<IPublicTrainingPackageService, PublicTrainingPackageService>();
             services.AddScoped<IBookingService, BookingService>();
+            services.AddScoped<IBookingSessionUsageService, BookingSessionUsageService>();
             services.AddScoped<ITrainingSessionService, TrainingSessionService>();
             services.AddScoped<ILearnerAssessmentService, LearnerAssessmentService>();
             services.AddScoped<ITrainingPlanService, TrainingPlanService>();

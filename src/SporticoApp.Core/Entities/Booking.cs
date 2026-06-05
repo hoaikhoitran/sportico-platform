@@ -48,6 +48,13 @@ public partial class Booking
 
     public DateTime UpdatedAt { get; set; }
 
+    /// <summary>
+    /// Application-managed optimistic concurrency token, bumped whenever a training session is
+    /// created against this booking (and on completion). Prevents two concurrent create-session
+    /// requests from both passing the quota check and exceeding TotalSessions.
+    /// </summary>
+    public int Version { get; set; }
+
     public virtual User Learner { get; set; } = null!;
 
     public virtual CoachProfile Coach { get; set; } = null!;

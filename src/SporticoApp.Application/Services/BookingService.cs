@@ -27,6 +27,7 @@ namespace SporticoApp.Application.Services
         private readonly IPayOsService _payOsService;
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
+        private readonly IBookingSessionUsageService _sessionUsageService;
         private readonly ILogger<BookingService> _logger;
         private readonly bool _enableManualPurchase;
         private readonly IValidator<PurchaseTrainingPackageManualRequest> _manualValidator;
@@ -40,6 +41,7 @@ namespace SporticoApp.Application.Services
             IPayOsService payOsService,
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
+            IBookingSessionUsageService sessionUsageService,
             ILogger<BookingService> logger,
             IOptions<FeatureOptions> featureOptions,
             IValidator<PurchaseTrainingPackageManualRequest> manualValidator,
@@ -52,11 +54,33 @@ namespace SporticoApp.Application.Services
             _payOsService = payOsService;
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
+            _sessionUsageService = sessionUsageService;
             _logger = logger;
             _enableManualPurchase = featureOptions.Value.EnableManualPurchase;
             _manualValidator = manualValidator;
             _payOsValidator = payOsValidator;
             _filterValidator = filterValidator;
+        }
+
+        /// <summary>Maps a page of bookings, enriching each with real session usage (one grouped query).</summary>
+        private async Task<List<BookingResponse>> MapWithUsageAsync(IReadOnlyCollection<Booking> bookings)
+        {
+            if (bookings.Count == 0)
+            {
+                return new List<BookingResponse>();
+            }
+
+            var totals = bookings
+                .GroupBy(b => b.Id)
+                .ToDictionary(g => g.Key, g => g.First().TotalSessions);
+
+            var usageMap = await _sessionUsageService.GetMapAsync(totals);
+
+            return bookings
+                .Select(b => usageMap.TryGetValue(b.Id, out var usage)
+                    ? b.ToResponse(usage)
+                    : b.ToResponse())
+                .ToList();
         }
 
         public async Task<Result<BookingResponse>> PurchaseManualAsync(
@@ -455,7 +479,7 @@ namespace SporticoApp.Application.Services
             var (items, totalCount) = await _bookingRepository.GetPagedByLearnerAsync(learnerId, filter);
 
             var response = new PagedResult<BookingResponse>(
-                items.Select(x => x.ToResponse()).ToList(),
+                await MapWithUsageAsync(items),
                 totalCount,
                 filter.PageNumber,
                 filter.PageSize);
@@ -484,7 +508,8 @@ namespace SporticoApp.Application.Services
                     "Booking not found");
             }
 
-            return Result<BookingResponse>.Success(booking.ToResponse());
+            var usage = await _sessionUsageService.GetAsync(booking.Id, booking.TotalSessions);
+            return Result<BookingResponse>.Success(booking.ToResponse(usage));
         }
 
         public async Task<Result<PagedResult<BookingResponse>>> GetCoachBookingsAsync(
@@ -507,7 +532,7 @@ namespace SporticoApp.Application.Services
             var (items, totalCount) = await _bookingRepository.GetPagedByCoachAsync(coachId, filter);
 
             var response = new PagedResult<BookingResponse>(
-                items.Select(x => x.ToResponse()).ToList(),
+                await MapWithUsageAsync(items),
                 totalCount,
                 filter.PageNumber,
                 filter.PageSize);
@@ -536,7 +561,8 @@ namespace SporticoApp.Application.Services
                     "Booking not found");
             }
 
-            return Result<BookingResponse>.Success(booking.ToResponse());
+            var usage = await _sessionUsageService.GetAsync(booking.Id, booking.TotalSessions);
+            return Result<BookingResponse>.Success(booking.ToResponse(usage));
         }
 
         private Booking CreateBookingSnapshot(

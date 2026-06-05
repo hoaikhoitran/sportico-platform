@@ -289,6 +289,28 @@ namespace SporticoApp.Infrastructure.Services.Payments
             else if (data.TryGetProperty("status", out var status))
                 result.State = status.GetString() ?? string.Empty;
 
+            // Batch payouts (id like "batch_…") may nest the outcome inside a transactions array
+            // rather than exposing a top-level state/status. Fall back to the first transaction's
+            // state/status so the withdrawal can still be reconciled to a terminal outcome.
+            if (string.IsNullOrWhiteSpace(result.State) &&
+                data.TryGetProperty("transactions", out var txns) &&
+                txns.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var txn in txns.EnumerateArray())
+                {
+                    if (txn.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    if (txn.TryGetProperty("state", out var txnState))
+                        result.State = txnState.GetString() ?? string.Empty;
+                    else if (txn.TryGetProperty("status", out var txnStatus))
+                        result.State = txnStatus.GetString() ?? string.Empty;
+
+                    if (!string.IsNullOrWhiteSpace(result.State))
+                        break;
+                }
+            }
+
             if (data.TryGetProperty("toBin", out var toBin))
                 result.ToBin = toBin.GetString();
 

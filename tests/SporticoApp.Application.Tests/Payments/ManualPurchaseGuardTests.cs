@@ -40,6 +40,7 @@ public class ManualPurchaseGuardTests
             new FakePayOsService(),
             new FakeCoachWalletRepository(),
             new FakeNotificationRepository(),
+            new FakeBookingSessionUsageService(),
             NullLogger<BookingService>.Instance,
             Microsoft.Extensions.Options.Options.Create(new FeatureOptions { EnableManualPurchase = enableManual }),
             new PassValidator<PurchaseTrainingPackageManualRequest>(),
