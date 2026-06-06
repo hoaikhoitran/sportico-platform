@@ -11,6 +11,8 @@ namespace SporticoApp.Application.Validators.Reviews
             RuleFor(x => x.Reason)
                 .NotEmpty()
                 .WithMessage("Reason is required")
+                .MinimumLength(10)
+                .WithMessage("Reason must be at least 10 characters")
                 .MaximumLength(200)
                 .WithMessage("Reason must be at most 200 characters");
 

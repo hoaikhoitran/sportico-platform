@@ -41,6 +41,7 @@ namespace SporticoApp.Application.Services
             Guid reviewId,
             CreateReviewReportRequest request)
         {
+
             var validationResult = await _createValidator.ValidateAsync(request);
             if (!validationResult.IsValid)
             {
