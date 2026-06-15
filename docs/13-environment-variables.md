@@ -80,6 +80,17 @@ are optional — sensible defaults make it work out of the box.
 |---|---|---|---|
 | `AppSettings__ApiBaseUrl` | `AppSettings:ApiBaseUrl` | `https://your-app-base-url` | Used to build the email verification link (`{ApiBaseUrl}/api/auth/verify-email?token=...`). Required for registration. |
 
+## Gemini (Advisory Chatbot)
+
+Powers the AI advisory chatbot (`POST /api/v1/advisory/messages`, roles `learner` + `admin`) that gives
+sports-training advice and recommends coaches. Calls the Google Generative Language `generateContent` endpoint.
+
+| Env var | Config key | Placeholder | Notes |
+|---|---|---|---|
+| `Gemini__ApiKey` | `Gemini:ApiKey` | `<google-generative-language-api-key>` | **Secret.** Never commit. Locally set via user secrets: `dotnet user-secrets set "Gemini:ApiKey" "<key>" --project src/SporticoApp.Api`. When blank, the advisory endpoint fails with `ADVISORY_REPLY_FAILED`. |
+| `Gemini__Model` | `Gemini:Model` | `gemini-2.0-flash` | Model id used for `generateContent`. Defaults to `gemini-2.0-flash`. |
+| `Gemini__BaseUrl` | `Gemini:BaseUrl` | `https://generativelanguage.googleapis.com` | API base. Optional — defaults to the Google Generative Language host. |
+
 ## CORS (recommended, not yet implemented)
 
 > NOTE: CORS is not configured in the reviewed `Program.cs`. If/when added, expose origins via configuration, e.g. `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`. See [12 — Deployment Guide](12-deployment-guide.md#cors).

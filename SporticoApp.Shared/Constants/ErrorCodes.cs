@@ -226,5 +226,13 @@ namespace SporticoApp.Shared.Constants
             "REVIEW_REPORT_NOT_FOUND";
         public const string ReviewReportNotAllowed =
             "REVIEW_REPORT_NOT_ALLOWED";
+
+        // Advisory chatbot
+        public const string AdvisoryConversationNotFound =
+            "ADVISORY_CONVERSATION_NOT_FOUND";
+        public const string AdvisoryConversationNotOwned =
+            "ADVISORY_CONVERSATION_NOT_OWNED";
+        public const string AdvisoryReplyFailed =
+            "ADVISORY_REPLY_FAILED";
     }
 }

@@ -33,6 +33,7 @@ namespace SporticoApp.Application
             services.AddScoped<ICoachWalletService, CoachWalletService>();
             services.AddScoped<IWithdrawalService, WithdrawalService>();
             services.AddScoped<IChatService, ChatService>();
+            services.AddScoped<IAdvisoryService, AdvisoryService>();
             services.AddScoped<ICoachAvailabilityService, CoachAvailabilityService>();
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<IPublicCoachService, PublicCoachService>();

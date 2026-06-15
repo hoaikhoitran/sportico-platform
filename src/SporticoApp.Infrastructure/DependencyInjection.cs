@@ -9,6 +9,7 @@ using SporticoApp.Infrastructure.Persistence;
 using SporticoApp.Infrastructure.Persistence.Configurations;
 using SporticoApp.Infrastructure.Persistence.Repositories;
 using SporticoApp.Infrastructure.Services;
+using SporticoApp.Infrastructure.Services.Advisory;
 using SporticoApp.Infrastructure.Services.Payments;
 
 namespace SporticoApp.Infrastructure
@@ -28,6 +29,10 @@ namespace SporticoApp.Infrastructure
 
             services.Configure<PayOsSettings>(options =>
                 configuration.GetSection("PayOs").Bind(options));
+
+            // Gemini advisory chatbot settings (API key comes from configuration / user secrets).
+            services.Configure<GeminiSettings>(options =>
+                configuration.GetSection("Gemini").Bind(options));
 
             // Dedicated PayOS Payout (Chi) channel credentials — kept separate from the inbound
             // PayOs payment-link credentials. Real values come from PayOsPayout__* env vars.
@@ -55,6 +60,7 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<ICoachWalletRepository, CoachWalletRepository>();
             services.AddScoped<IWithdrawalRequestRepository, WithdrawalRequestRepository>();
             services.AddScoped<IChatRepository, ChatRepository>();
+            services.AddScoped<IAdvisoryConversationRepository, AdvisoryConversationRepository>();
             services.AddScoped<ICoachAvailabilityRepository, CoachAvailabilityRepository>();
             services.AddScoped<INotificationRepository, NotificationRepository>();
             services.AddScoped<IPublicCoachRepository, PublicCoachRepository>();
@@ -72,6 +78,16 @@ namespace SporticoApp.Infrastructure
             {
                 var settings = sp.GetRequiredService<IOptions<PayOsSettings>>().Value;
                 client.BaseAddress = new Uri(settings.BaseUrl);
+            });
+
+            // Gemini advisory chatbot HTTP client (Google Generative Language API).
+            services.AddHttpClient<IGeminiAdvisoryService, GeminiAdvisoryService>((sp, client) =>
+            {
+                var settings = sp.GetRequiredService<IOptions<GeminiSettings>>().Value;
+                var baseUrl = string.IsNullOrWhiteSpace(settings.BaseUrl)
+                    ? "https://generativelanguage.googleapis.com"
+                    : settings.BaseUrl;
+                client.BaseAddress = new Uri(baseUrl);
             });
 
             // Payout (Chi) HTTP client uses the dedicated payout BaseUrl, falling back to the

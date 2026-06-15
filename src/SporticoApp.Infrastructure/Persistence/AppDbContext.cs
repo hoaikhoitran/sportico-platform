@@ -12,6 +12,8 @@ public class AppDbContext : DbContext
     {
     }
 
+    public DbSet<AdvisoryConversation> AdvisoryConversations => Set<AdvisoryConversation>();
+    public DbSet<AdvisoryMessage> AdvisoryMessages => Set<AdvisoryMessage>();
     public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
     public DbSet<CoachAvailabilitySlot> CoachAvailabilitySlots => Set<CoachAvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
