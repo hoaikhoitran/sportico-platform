@@ -247,6 +247,8 @@ public class TrainingSessionServiceTests
         public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses)
             => Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
         public Task<bool> HasOverlapAsync(Guid userId, DateTime s, DateTime e, List<string> st) => Task.FromResult(false);
+        public Task<bool> HasPackageGeneratedSessionsAsync(Guid bookingId) => Task.FromResult(false);
+        public Task AddRangeWithoutSaveAsync(IEnumerable<TrainingSession> sessions) => Task.CompletedTask;
 
         public Task<TrainingSession?> GetByIdAsync(Guid id) => throw new NotImplementedException();
         public Task<(List<TrainingSession> Items, int TotalCount)> GetByBookingPagedAsync(Guid bookingId, TrainingSessionFilterRequest filter) => throw new NotImplementedException();

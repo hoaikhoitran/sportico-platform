@@ -10,6 +10,9 @@ namespace SporticoApp.Application.DTOs.TrainingSessions
 
         public Guid CoachId { get; set; }
 
+        /// <summary>Set when the session was auto-generated from a package schedule slot; null for legacy sessions.</summary>
+        public Guid? TrainingPackageSessionSlotId { get; set; }
+
         public DateTime StartTime { get; set; }
 
         public DateTime EndTime { get; set; }

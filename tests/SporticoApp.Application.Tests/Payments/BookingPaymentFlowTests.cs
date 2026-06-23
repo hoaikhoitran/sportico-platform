@@ -26,9 +26,34 @@ public class BookingPaymentFlowTests
         public FakePaymentRepository Payments = null!;
         public FakeCoachWalletRepository Wallets = null!;
         public FakeNotificationRepository Notifications = null!;
+        public FakeTrainingSessionRepository Sessions = null!;
         public FakePayOsService PayOs = null!;
         public Booking Booking = null!;
         public Payment Payment = null!;
+    }
+
+    /// <summary>Builds a fixed schedule of open slots for a package (matches the new purchase flow).</summary>
+    internal static List<TrainingPackageSessionSlot> BuildSlots(Guid packageId, int count, int maxParticipants = 5)
+    {
+        var slots = new List<TrainingPackageSessionSlot>();
+        var firstDay = DateTime.UtcNow.Date.AddDays(1);
+        for (var i = 1; i <= count; i++)
+        {
+            var start = firstDay.AddDays(i).AddHours(9);
+            slots.Add(new TrainingPackageSessionSlot
+            {
+                Id = Guid.NewGuid(),
+                TrainingPackageId = packageId,
+                SessionNumber = i,
+                StartTime = start,
+                EndTime = start.AddHours(1),
+                MaxParticipants = maxParticipants,
+                BookedParticipants = 0,
+                Status = TrainingPackageSessionSlotStatuses.Open
+            });
+        }
+
+        return slots;
     }
 
     private static Scenario Build(string bookingStatus, string paymentStatus)
@@ -42,6 +67,7 @@ public class BookingPaymentFlowTests
             Price = 1000m,
             Status = TrainingPackageStatuses.Published
         };
+        package.SessionSlots = BuildSlots(package.Id, package.SessionCount);
 
         var booking = new Booking
         {
@@ -78,11 +104,13 @@ public class BookingPaymentFlowTests
                 ? new CoachWallet { Id = Guid.NewGuid(), CoachId = CoachId }
                 : null);
         var notifications = new FakeNotificationRepository();
+        var sessions = new FakeTrainingSessionRepository();
         var payos = new FakePayOsService();
 
         var service = new BookingService(
             new FakeTrainingPackageRepository(package),
             bookings,
+            sessions,
             payments,
             payos,
             wallets,
@@ -101,6 +129,7 @@ public class BookingPaymentFlowTests
             Payments = payments,
             Wallets = wallets,
             Notifications = notifications,
+            Sessions = sessions,
             PayOs = payos,
             Booking = booking,
             Payment = payment
@@ -127,12 +156,14 @@ public class BookingPaymentFlowTests
             Price = 1000m,
             Status = TrainingPackageStatuses.Published
         };
+        package.SessionSlots = BuildSlots(package.Id, package.SessionCount);
 
         var bookings = new FakeBookingRepository();
         var payments = new FakePaymentRepository();
         var service = new BookingService(
             new FakeTrainingPackageRepository(package),
             bookings,
+            new FakeTrainingSessionRepository(),
             payments,
             new FakePayOsService(),
             new FakeCoachWalletRepository(),

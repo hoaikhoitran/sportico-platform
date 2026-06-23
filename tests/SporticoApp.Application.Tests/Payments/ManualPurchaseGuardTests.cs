@@ -32,10 +32,12 @@ public class ManualPurchaseGuardTests
             Price = 2000m,
             Status = TrainingPackageStatuses.Published
         };
+        package.SessionSlots = BookingPaymentFlowTests.BuildSlots(package.Id, package.SessionCount);
         var bookings = new FakeBookingRepository();
         var svc = new BookingService(
             new FakeTrainingPackageRepository(package),
             bookings,
+            new FakeTrainingSessionRepository(),
             new FakePaymentRepository(),
             new FakePayOsService(),
             new FakeCoachWalletRepository(),

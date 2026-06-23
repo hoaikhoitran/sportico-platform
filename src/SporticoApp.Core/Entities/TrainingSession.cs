@@ -20,6 +20,14 @@ public partial class TrainingSession
 
     public virtual CoachAvailabilitySlot? AvailabilitySlot { get; set; }
 
+    /// <summary>
+    /// The package schedule slot this session was auto-generated from when the learner purchased the
+    /// package. Null for legacy availability-slot sessions. Unique per booking to keep generation idempotent.
+    /// </summary>
+    public Guid? TrainingPackageSessionSlotId { get; set; }
+
+    public virtual TrainingPackageSessionSlot? TrainingPackageSessionSlot { get; set; }
+
     public DateTime StartTime { get; set; }
 
     public DateTime EndTime { get; set; }

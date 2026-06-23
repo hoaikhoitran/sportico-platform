@@ -42,6 +42,7 @@ public class AppDbContext : DbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<Sport> Sports => Set<Sport>();
     public DbSet<TrainingPackage> TrainingPackages => Set<TrainingPackage>();
+    public DbSet<TrainingPackageSessionSlot> TrainingPackageSessionSlots => Set<TrainingPackageSessionSlot>();
     public DbSet<TrainingPlanDay> TrainingPlanDays => Set<TrainingPlanDay>();
     public DbSet<TrainingPlanExercise> TrainingPlanExercises => Set<TrainingPlanExercise>();
     public DbSet<TrainingPlanWeek> TrainingPlanWeeks => Set<TrainingPlanWeek>();

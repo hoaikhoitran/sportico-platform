@@ -2,38 +2,67 @@
 
 End-to-end flows with status transitions. Status values are the string constants in `SporticoApp.Shared/Constants`.
 
-## Coach Training Package Flow
+## Coach Training Package Flow (fixed-schedule model)
 
 ```
-Coach creates package        → status: pending
-Admin approves               → status: published   (publicly listable & purchasable)
-        or rejects           → status: rejected    (RejectionReason set)
-Coach archives               → status: archived
+Coach creates package + full schedule → status: pending
+Admin approves                        → status: published   (publicly listable & purchasable)
+        or rejects                    → status: rejected     (RejectionReason set)
+Coach archives                        → status: archived
 ```
+
+The package is **start/end-date based** (the old monthly/`durationDays` input is gone — `DurationDays`
+is now derived from `StartDate`..`EndDate` and kept only for legacy booking-expiry). The coach must
+define the **entire schedule** when creating the package: `sessions` is an array of exactly
+`sessionCount` items, each becoming a `TrainingPackageSessionSlot` with `sessionNumber`, `startTime`,
+`endTime`, `level`, `maxParticipants`, `location`, `isOnline`, `meetingUrl`, `note`.
+
+Validation (FluentValidation):
+- `sessions.Count == sessionCount`; `sessionNumber` unique and covering `1..sessionCount`.
+- Every session must fall within `[startDate, endDate]`; `startTime < endTime`.
+- `maxParticipants > 0`; offline sessions require a `location`.
+- No two sessions in the same package may overlap in time.
 
 Steps:
-1. Coach: `POST /api/training-packages` → package created `pending`.
+1. Coach: `POST /api/training-packages` (with `sessions`) → package + slots created `pending`.
 2. Admin: `GET /api/admin/training-packages/pending` to review.
 3. Admin: `PUT /api/admin/training-packages/{id}/approve` → `published`, notification to coach.
    - Or `PUT /api/admin/training-packages/{id}/reject` with a reason → `rejected`, notification to coach.
-4. Public/learners now see it via `GET /api/public/training-packages`.
+4. Public/learners now see it (with its full schedule and per-session remaining seats) via
+   `GET /api/public/training-packages`.
 
-## Booking Purchase Flow
+Updating a package (`PUT /api/training-packages/{id}`) is only allowed while it is **not published**
+(`pending`/`rejected`/`archived`) and replaces the whole schedule — safe because no active booking
+references those slots yet.
+
+## Booking Purchase Flow (auto-scheduled sessions)
 
 Two paths produce a `Booking`. Both snapshot commission fields at purchase time (see [08 — Payment and Wallet](08-payment-and-wallet.md)).
+**The learner no longer books individual sessions** — purchasing reserves a seat on every package
+session slot and the system auto-creates one `TrainingSession` (status `scheduled`) per slot.
+
+Capacity (all paths):
+- The package must have a schedule, else `409 TRAINING_PACKAGE_HAS_NO_SCHEDULE`.
+- Every slot must have a free seat (`BookedParticipants < MaxParticipants`), else `409 TRAINING_PACKAGE_SESSION_SLOT_FULL`.
+- Reserving a seat bumps `TrainingPackageSessionSlot.Version` (optimistic concurrency): if two learners
+  race for the last seat, only one commits; the other gets `409 CONCURRENCY_CONFLICT`.
+- Learners are **never** blocked by their own schedule overlap (a learner account may buy for a child).
 
 ### Manual (no gateway)
 ```
 Learner POST /api/bookings/purchase/manual
+  → reserve 1 seat on every package session slot (BookedParticipants++)
   → Booking status: active   (PaidAt set)
   → Payment: manual / paid
-  → Coach wallet ensured, chat room ensured
-  → Notifications: coach ("new booking"), learner ("booking active")
+  → auto-create one scheduled TrainingSession per slot (BookingId/LearnerId/CoachId/SlotId set)
+  → Coach wallet ensured
+  → Notifications: coach ("new booking"), learner ("sessions scheduled")
 ```
 
 ### PayOS
 ```
 Learner POST /api/bookings/purchase/payos
+  → reserve 1 seat on every package session slot (prevents overselling while pending)
   → Booking status: pending_payment
   → Payment: payos / pending  (+ checkoutUrl, orderCode)
 Learner pays at checkoutUrl
@@ -41,6 +70,7 @@ PayOS → POST /api/payments/payos/webhook        (primary activation path)
   → signature verified
   → ActivatePaidBookingAsync(payment, booking, "webhook")
        Payment → paid, Booking → active (PaidAt, ExpiresAt set)
+       auto-create one scheduled TrainingSession per slot (idempotent — once only)
        Coach wallet ensured; notifications: coach + learner (once)
 
 Fallback if the webhook never arrives:
@@ -52,7 +82,16 @@ Learner success page → POST /api/payments/payos/{orderCode}/reconcile
 
 Preconditions for both: package must be `published`, and a learner cannot purchase their own package.
 
-Cancellation/failure (PayOS webhook **or** reconcile reports `cancelled`/`failed`/`expired`): Payment → `cancelled`/`failed`, Booking → `cancelled`.
+Cancellation/failure (PayOS webhook **or** reconcile reports `cancelled`/`failed`/`expired`): Payment →
+`cancelled`/`failed`, Booking → `cancelled`, and the **reserved seats are released** (`BookedParticipants--`,
+slot re-opened). Idempotent: only the first `pending_payment → cancelled` transition releases seats, so
+repeated webhook/reconcile calls never release a seat twice.
+
+### Idempotency / no duplicates
+- Session auto-generation is skipped if the booking already has package-generated sessions, and is
+  backstopped by a unique index `(booking_id, training_package_session_slot_id)` — repeated
+  webhook/reconcile calls never create duplicate sessions or consume a seat more than once.
+- `Booking.Version` is bumped on first activation so a webhook+reconcile race cannot both generate.
 
 > **Why the coach's `POST /api/bookings/{id}/training-plan` returns 409:** a training plan can only be
 > created for an `active` booking. If a learner paid but the booking is still `pending_payment`, the
@@ -63,17 +102,34 @@ Cancellation/failure (PayOS webhook **or** reconcile reports `cancelled`/`failed
 
 ## Session Flow
 
+### New flow — sessions auto-created on purchase
 ```
-Learner requests   → session status: requested   (booking must be active)
-Coach confirms     → session status: scheduled    (ConfirmedAt set)
-Coach completes    → session status: completed     (CompletedAt set)
-                      → Booking.CompletedSessions += 1
-                      → Coach wallet credited PerSessionCoachAmount
-                      → if CompletedSessions >= TotalSessions: Booking → completed
-Either party cancels (from requested/scheduled) → session status: cancelled
+Purchase (manual paid / PayOS paid) → one TrainingSession per package slot, status: scheduled
+Coach completes        → session status: completed   (CompletedAt set)
+                          → Booking.CompletedSessions re-synced from real completed count
+                          → Coach wallet credited PerSessionCoachAmount  + ledger credit
+                          → if CompletedSessions >= TotalSessions: Booking → completed
+Either party cancels (from scheduled) → session status: cancelled
 ```
 
-Rules enforced on request:
+Generated sessions appear in:
+- learner list `GET /api/learners/me/training-sessions`
+- coach list `GET /api/coaches/me/training-sessions`
+- booking detail `GET /api/bookings/{bookingId}/sessions`
+
+The learner **does not** call `POST /api/bookings/{bookingId}/sessions` in the new flow, and the
+learner-overlap rule is **not** applied to purchase-generated sessions. Coach payment is still
+**per completed session** — buying the package does not credit the coach.
+
+### Legacy flow — availability-slot request (still supported)
+The original learner-requests-a-session path remains for availability-slot bookings:
+```
+Learner requests   → session status: requested   (booking must be active; consumes an availability slot)
+Coach confirms     → session status: scheduled    (ConfirmedAt set)
+Coach completes    → session status: completed     (same wallet/booking effects as above)
+Either party cancels (from requested/scheduled) → session status: cancelled (availability seat released)
+```
+Rules enforced on request (legacy only):
 - Booking must be `active`.
 - Count of sessions in `requested + scheduled + completed` must be `< Booking.TotalSessions` (else `SESSION_LIMIT_EXCEEDED`).
 - `StartTime` must be in the future.

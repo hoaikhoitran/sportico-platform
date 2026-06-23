@@ -140,6 +140,10 @@ namespace SporticoApp.Shared.Constants
             "TRAINING_PACKAGE_NOT_OWNED";
         public const string InvalidTrainingPackageStatus =
             "INVALID_TRAINING_PACKAGE_STATUS";
+        public const string TrainingPackageHasNoSchedule =
+            "TRAINING_PACKAGE_HAS_NO_SCHEDULE";
+        public const string TrainingPackageSessionSlotFull =
+            "TRAINING_PACKAGE_SESSION_SLOT_FULL";
 
         // Booking
         public const string BookingNotFound =
@@ -165,6 +169,10 @@ namespace SporticoApp.Shared.Constants
             "INVALID_TRAINING_SESSION_STATUS";
         public const string ScheduleConflict =
             "SCHEDULE_CONFLICT";
+
+        /// <summary>Generic optimistic-concurrency clash (slot seat / wallet) — caller should retry.</summary>
+        public const string ConcurrencyConflict =
+            "CONCURRENCY_CONFLICT";
 
         // Personalization
         public const string LearnerAssessmentNotFound =

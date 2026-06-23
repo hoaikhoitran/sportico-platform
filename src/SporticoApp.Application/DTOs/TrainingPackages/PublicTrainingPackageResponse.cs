@@ -26,6 +26,10 @@ namespace SporticoApp.Application.DTOs.TrainingPackages
 
         public int DurationDays { get; set; }
 
+        public DateTime StartDate { get; set; }
+
+        public DateTime EndDate { get; set; }
+
         public string? Location { get; set; }
 
         public bool IsOnline { get; set; }
@@ -39,6 +43,9 @@ namespace SporticoApp.Application.DTOs.TrainingPackages
         public DateTime CreatedAt { get; set; }
 
         public DateTime UpdatedAt { get; set; }
+
+        /// <summary>The fixed schedule of sessions, with per-session capacity and remaining seats.</summary>
+        public List<TrainingPackageSessionResponse> Sessions { get; set; } = new();
 
         public PublicCoachSummaryResponse? Coach { get; set; }
     }

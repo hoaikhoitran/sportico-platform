@@ -22,6 +22,13 @@ public sealed class TrainingPackageConfiguration : IEntityTypeConfiguration<Trai
         builder.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+        // Start/end-date model (replaces the old duration/month thinking). Defaults backfill any
+        // pre-existing rows so adding the NOT NULL columns is safe; those legacy packages have no
+        // schedule and are rejected at purchase with a clear conflict.
+        builder.Property(e => e.StartDate).HasDefaultValueSql("now()");
+        builder.Property(e => e.EndDate).HasDefaultValueSql("now()");
+
         builder.Property(e => e.Title).HasMaxLength(200);
         builder.Property(e => e.Description).HasMaxLength(3000);
         builder.Property(e => e.Price).HasPrecision(12, 2);

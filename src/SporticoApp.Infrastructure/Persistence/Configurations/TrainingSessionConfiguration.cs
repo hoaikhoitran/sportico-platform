@@ -25,6 +25,15 @@ public sealed class TrainingSessionConfiguration : IEntityTypeConfiguration<Trai
         // concurrency token (CoachAvailabilitySlot.Version) instead of a DB uniqueness constraint.
         builder.HasIndex(e => e.AvailabilitySlotId, "ix_training_sessions_availability_slot_id");
 
+        builder.HasIndex(e => e.TrainingPackageSessionSlotId, "ix_training_sessions_package_session_slot_id");
+
+        // Idempotency backstop for purchase-generated sessions: a booking may have at most one session
+        // per package schedule slot, so repeated PayOS webhook/reconcile calls cannot duplicate them.
+        builder.HasIndex(e => new { e.BookingId, e.TrainingPackageSessionSlotId },
+                "uq_training_sessions_booking_package_slot")
+            .IsUnique()
+            .HasFilter("training_package_session_slot_id IS NOT NULL");
+
         builder.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -59,5 +68,11 @@ public sealed class TrainingSessionConfiguration : IEntityTypeConfiguration<Trai
             .HasForeignKey(d => d.AvailabilitySlotId)
             .OnDelete(DeleteBehavior.SetNull)
             .HasConstraintName("fk_training_sessions_availability_slot");
+
+        builder.HasOne(d => d.TrainingPackageSessionSlot)
+            .WithMany()
+            .HasForeignKey(d => d.TrainingPackageSessionSlotId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .HasConstraintName("fk_training_sessions_package_session_slot");
     }
 }

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace SporticoApp.Application.DTOs.TrainingPackages
 {
     public class UpdateTrainingPackageRequest
@@ -12,7 +14,11 @@ namespace SporticoApp.Application.DTOs.TrainingPackages
 
         public int SessionCount { get; set; }
 
-        public int DurationDays { get; set; }
+        /// <summary>First calendar day the schedule may span. Replaces the old duration/month model.</summary>
+        public DateTime StartDate { get; set; }
+
+        /// <summary>Last calendar day the schedule may span.</summary>
+        public DateTime EndDate { get; set; }
 
         public string? Location { get; set; }
 
@@ -21,5 +27,12 @@ namespace SporticoApp.Application.DTOs.TrainingPackages
         public string? Level { get; set; }
 
         public string? GoalType { get; set; }
+
+        /// <summary>
+        /// Full replacement schedule. Must contain exactly <see cref="SessionCount"/> items.
+        /// Updating is only allowed while the package is not published, so replacing the schedule
+        /// is safe (no active bookings reference these slots yet).
+        /// </summary>
+        public List<CreateTrainingPackageSessionRequest> Sessions { get; set; } = new();
     }
 }

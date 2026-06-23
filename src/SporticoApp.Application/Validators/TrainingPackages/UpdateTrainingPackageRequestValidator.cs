@@ -33,9 +33,26 @@ namespace SporticoApp.Application.Validators.TrainingPackages
                 .GreaterThan(0)
                 .WithMessage("SessionCount must be greater than 0");
 
-            RuleFor(x => x.DurationDays)
-                .GreaterThan(0)
-                .WithMessage("DurationDays must be greater than 0");
+            RuleFor(x => x.StartDate)
+                .NotEmpty()
+                .WithMessage("StartDate is required");
+
+            RuleFor(x => x.EndDate)
+                .NotEmpty()
+                .WithMessage("EndDate is required")
+                .GreaterThanOrEqualTo(x => x.StartDate)
+                .WithMessage("EndDate must be on or after StartDate");
+
+            RuleFor(x => x.Sessions)
+                .NotEmpty()
+                .WithMessage("Sessions are required");
+
+            RuleForEach(x => x.Sessions)
+                .SetValidator(new CreateTrainingPackageSessionRequestValidator());
+
+            RuleFor(x => x).Custom((request, context) =>
+                TrainingPackageScheduleValidator.Validate(
+                    context, request.Sessions, request.SessionCount, request.StartDate, request.EndDate));
 
             RuleFor(x => x.Location)
                 .MaximumLength(255)
