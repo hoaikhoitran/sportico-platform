@@ -189,6 +189,16 @@ namespace SporticoApp.Application.Services
 
             trainingPackage.ApplyUpdate(request);
 
+            // Replace the whole schedule. Update is only permitted while the package is not published
+            // (pending / rejected / archived), so no active bookings reference these slots — clearing
+            // the tracked collection deletes the old slots (cascade) and the new schedule is inserted.
+            var now = DateTime.UtcNow;
+            trainingPackage.SessionSlots.Clear();
+            foreach (var session in request.Sessions)
+            {
+                trainingPackage.SessionSlots.Add(session.ToSlotEntity(trainingPackage.Id, now));
+            }
+
             await _trainingPackageRepository.SaveChangesAsync();
 
             var updated = await _trainingPackageRepository.GetOwnedByIdAsync(coachId, id);

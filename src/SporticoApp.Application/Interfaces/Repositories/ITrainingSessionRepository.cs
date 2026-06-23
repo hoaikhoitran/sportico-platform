@@ -48,6 +48,15 @@ namespace SporticoApp.Application.Interfaces.Repositories
             DateTime endTime,
             List<string> activeStatuses);
 
+        /// <summary>
+        /// True when the booking already has package-generated sessions (TrainingPackageSessionSlotId
+        /// set). Used to keep auto-generation idempotent across repeated PayOS webhook/reconcile calls.
+        /// </summary>
+        Task<bool> HasPackageGeneratedSessionsAsync(Guid bookingId);
+
+        /// <summary>Adds many sessions without saving (committed by the caller's unit of work).</summary>
+        Task AddRangeWithoutSaveAsync(IEnumerable<TrainingSession> sessions);
+
         Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByLearnerAsync(
             Guid learnerId,
             TrainingSessionFilterRequest filter);

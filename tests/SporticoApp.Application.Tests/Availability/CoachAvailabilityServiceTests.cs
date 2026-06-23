@@ -167,6 +167,8 @@ public class CoachAvailabilityServiceTests
         public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId) => throw new NotImplementedException();
         public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds) => throw new NotImplementedException();
         public Task<bool> HasOverlapAsync(Guid userId, DateTime s, DateTime e, List<string> st) => throw new NotImplementedException();
+        public Task<bool> HasPackageGeneratedSessionsAsync(Guid bookingId) => throw new NotImplementedException();
+        public Task AddRangeWithoutSaveAsync(IEnumerable<TrainingSession> sessions) => throw new NotImplementedException();
         public Task<TrainingSession?> GetByIdAsync(Guid id) => throw new NotImplementedException();
         public Task<TrainingSession?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
         public Task<(List<TrainingSession> Items, int TotalCount)> GetByBookingPagedAsync(Guid bookingId, SporticoApp.Application.DTOs.TrainingSessions.TrainingSessionFilterRequest filter) => throw new NotImplementedException();

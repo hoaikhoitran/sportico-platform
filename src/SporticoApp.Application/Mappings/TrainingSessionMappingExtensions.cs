@@ -32,6 +32,33 @@ namespace SporticoApp.Application.Mappings
             };
         }
 
+        /// <summary>
+        /// Builds the training session auto-generated from a package schedule slot when the booking
+        /// becomes active. Status is <c>scheduled</c> (no learner request step in the new flow).
+        /// </summary>
+        public static TrainingSession ToGeneratedSession(
+            this TrainingPackageSessionSlot slot,
+            Booking booking)
+        {
+            var now = DateTime.UtcNow;
+
+            return new TrainingSession
+            {
+                Id = Guid.NewGuid(),
+                BookingId = booking.Id,
+                LearnerId = booking.LearnerId,
+                CoachId = booking.CoachId,
+                TrainingPackageSessionSlotId = slot.Id,
+                StartTime = slot.StartTime,
+                EndTime = slot.EndTime,
+                Location = slot.Location,
+                MeetingUrl = slot.MeetingUrl,
+                Status = TrainingSessionStatuses.Scheduled,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+        }
+
         public static TrainingSessionResponse ToResponse(this TrainingSession session)
         {
             return new TrainingSessionResponse
@@ -40,6 +67,7 @@ namespace SporticoApp.Application.Mappings
                 BookingId = session.BookingId,
                 LearnerId = session.LearnerId,
                 CoachId = session.CoachId,
+                TrainingPackageSessionSlotId = session.TrainingPackageSessionSlotId,
                 StartTime = session.StartTime,
                 EndTime = session.EndTime,
                 Status = session.Status,

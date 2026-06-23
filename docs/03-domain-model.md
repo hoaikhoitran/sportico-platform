@@ -38,25 +38,32 @@ Join table linking a `CoachProfile` to the `Sport`s they coach.
 ## Marketplace Core
 
 ### TrainingPackage
-A paid offering a coach sells to learners.
-- **Key fields**: `Id`, `CoachId`, `SportId`, `Title`, `Description?`, `Price`, `SessionCount`, `DurationDays`, `Location?`, `IsOnline`, `Level?`, `GoalType?`, `Status` (`pending | published | rejected | archived`), `RejectionReason?`, `ReviewedByUserId?`, `ReviewedAt?`.
-- **Relationships**: belongs to `CoachProfile` and `Sport`; has many `Bookings`.
-- **Rules**: created as `pending`. Admin approves → `published` (only published packages are publicly listable and purchasable) or rejects → `rejected` (with reason). Coach can archive → `archived`.
+A paid offering a coach sells to learners. **Start/end-date based with a fixed schedule** (the coach
+defines every session at creation).
+- **Key fields**: `Id`, `CoachId`, `SportId`, `Title`, `Description?`, `Price`, `SessionCount`, `StartDate`, `EndDate`, `DurationDays` (legacy, derived from `StartDate`..`EndDate`), `Location?`, `IsOnline`, `Level?`, `GoalType?`, `Status` (`pending | published | rejected | archived`), `RejectionReason?`, `ReviewedByUserId?`, `ReviewedAt?`.
+- **Relationships**: belongs to `CoachProfile` and `Sport`; has many `Bookings`; has many `TrainingPackageSessionSlots` (the fixed schedule).
+- **Rules**: created as `pending` with exactly `SessionCount` session slots. Admin approves → `published` (only published packages are publicly listable and purchasable) or rejects → `rejected` (with reason). Coach can archive → `archived`. Editing (and thus replacing the schedule) is only allowed while not published.
+
+### TrainingPackageSessionSlot
+One scheduled session defined by the coach inside a package. The whole schedule is fixed at creation;
+purchasing the package consumes a seat here and auto-generates a `TrainingSession`.
+- **Key fields**: `Id`, `TrainingPackageId`, `SessionNumber` (1..SessionCount, unique), `StartTime`, `EndTime`, `Level?`, `Location?`, `IsOnline`, `MeetingUrl?`, `Note?`, `MaxParticipants`, `BookedParticipants`, `Status` (`open | full | cancelled`), `Version` (optimistic-concurrency token).
+- **Relationships**: belongs to one `TrainingPackage`.
+- **Rules**: `MaxParticipants > 0`; `BookedParticipants` never exceeds `MaxParticipants`; reserving the last seat flips `Status` to `full`. The `Version` token prevents overselling under concurrent purchases.
 
 ### Booking
 Created when a learner purchases a training package. **Snapshots** the commission math so later package edits don't change a paid booking.
 - **Key fields**: `Id`, `LearnerId`, `CoachId`, `TrainingPackageId`, `TotalAmount`, `PlatformFeeRate`, `PlatformFeeAmount`, `CoachReceiveAmount`, `PerSessionCoachAmount`, `TotalSessions`, `CompletedSessions`, `Status` (`pending_payment | active | completed | cancelled | refunded`), `PaidAt?`, `CompletedAt?`, `CancelledAt?`.
 - **Relationships**: belongs to `Learner` (User), `Coach` (CoachProfile), `TrainingPackage`; has many `TrainingSessions`; optional `LearnerAssessment` and `TrainingPlan`.
-- **Rules**: manual purchase is created `active` immediately; PayOS purchase is created `pending_payment` and activated by the webhook. Activation ensures a coach wallet and a chat room exist. A booking becomes `completed` when `CompletedSessions >= TotalSessions`.
+- **Rules**: manual purchase is created `active` immediately; PayOS purchase is created `pending_payment` and activated by the webhook. Purchasing reserves a seat on every package session slot and auto-creates the `TrainingSessions`. Activation ensures a coach wallet exists. A booking becomes `completed` when `CompletedSessions >= TotalSessions`. `Version` is an optimistic-concurrency token bumped on session creation/activation.
 
 ### TrainingSession
-A scheduled session inside a booking.
-- **Key fields**: `Id`, `BookingId`, `LearnerId`, `CoachId`, `StartTime`, `EndTime`, `Status` (`requested | scheduled | completed | cancelled | missed`), `MeetingUrl?`, `Location?`, `LearnerNote?`, `CoachNote?`, `ConfirmedAt?`, `CompletedAt?`, `CancelledAt?`.
+A scheduled session inside a booking — either auto-generated from a package schedule slot (new flow) or learner-requested from an availability slot (legacy flow).
+- **Key fields**: `Id`, `BookingId`, `LearnerId`, `CoachId`, `AvailabilitySlotId?` (legacy flow), `TrainingPackageSessionSlotId?` (new flow), `StartTime`, `EndTime`, `Status` (`requested | scheduled | completed | cancelled | missed`), `MeetingUrl?`, `Location?`, `LearnerNote?`, `CoachNote?`, `ConfirmedAt?`, `CompletedAt?`, `CancelledAt?`.
 - **Rules**:
-  - Only the learner can create (request) a session, and only on an `active` booking with a future `StartTime`.
-  - The number of sessions in `requested + scheduled + completed` state cannot exceed `Booking.TotalSessions`.
-  - Overlap is rejected for both coach and learner against existing `requested`/`scheduled` sessions (schedule conflict).
-  - Coach confirms `requested` → `scheduled`. Either party cancels a `requested`/`scheduled` session. Coach completes a `scheduled` session → `completed`, which credits the wallet.
+  - **New flow**: created automatically (status `scheduled`) when the booking becomes active — one per package slot, idempotent (unique `(BookingId, TrainingPackageSessionSlotId)`). The learner-overlap rule is **not** applied.
+  - **Legacy flow**: only the learner can request a session, on an `active` booking with a future `StartTime`; the `requested + scheduled + completed` count cannot exceed `Booking.TotalSessions`; coach/learner overlap is rejected (schedule conflict); coach confirms `requested` → `scheduled`.
+  - **Both**: coach completes a `scheduled` session → `completed`, which credits the coach wallet `PerSessionCoachAmount`. Either party can cancel a `requested`/`scheduled` session.
 
 ## Personalized Training
 

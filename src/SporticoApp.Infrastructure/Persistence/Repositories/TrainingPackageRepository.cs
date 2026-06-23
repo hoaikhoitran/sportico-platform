@@ -19,6 +19,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return await _context.TrainingPackages
                 .AsNoTracking()
                 .Include(x => x.Sport)
+                .Include(x => x.SessionSlots)
                 .FirstOrDefaultAsync(x => x.Id == id);
         }
 
@@ -27,6 +28,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return await _context.TrainingPackages
                 .AsNoTracking()
                 .Include(x => x.Sport)
+                .Include(x => x.SessionSlots)
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.User)
                 .FirstOrDefaultAsync(x => x.Id == id);
@@ -38,6 +40,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             IQueryable<TrainingPackage> query = _context.TrainingPackages
                 .AsNoTracking()
                 .Include(x => x.Sport)
+                .Include(x => x.SessionSlots)
                 .Include(x => x.Coach)
                     .ThenInclude(c => c.User);
 
@@ -58,6 +61,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             return await _context.TrainingPackages
                 .Include(x => x.Sport)
+                .Include(x => x.SessionSlots)
                 .FirstOrDefaultAsync(x => x.Id == id);
         }
 
@@ -66,6 +70,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return await _context.TrainingPackages
                 .AsNoTracking()
                 .Include(x => x.Sport)
+                .Include(x => x.SessionSlots)
                 .FirstOrDefaultAsync(x => x.Id == id && x.CoachId == coachId);
         }
 
@@ -73,7 +78,16 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             return await _context.TrainingPackages
                 .Include(x => x.Sport)
+                .Include(x => x.SessionSlots)
                 .FirstOrDefaultAsync(x => x.Id == id && x.CoachId == coachId);
+        }
+
+        public async Task<List<TrainingPackageSessionSlot>> GetSessionSlotsForUpdateAsync(Guid packageId)
+        {
+            return await _context.TrainingPackageSessionSlots
+                .Where(x => x.TrainingPackageId == packageId)
+                .OrderBy(x => x.SessionNumber)
+                .ToListAsync();
         }
 
         public async Task<(List<TrainingPackage> Items, int TotalCount)> GetPagedAsync(
@@ -81,7 +95,8 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             IQueryable<TrainingPackage> query = _context.TrainingPackages
                 .AsNoTracking()
-                .Include(x => x.Sport);
+                .Include(x => x.Sport)
+                .Include(x => x.SessionSlots);
 
             query = ApplyFilter(query, filter);
 

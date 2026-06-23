@@ -23,6 +23,7 @@ namespace SporticoApp.Application.Services
 
         private readonly ITrainingPackageRepository _trainingPackageRepository;
         private readonly IBookingRepository _bookingRepository;
+        private readonly ITrainingSessionRepository _trainingSessionRepository;
         private readonly IPaymentRepository _paymentRepository;
         private readonly IPayOsService _payOsService;
         private readonly ICoachWalletRepository _coachWalletRepository;
@@ -37,6 +38,7 @@ namespace SporticoApp.Application.Services
         public BookingService(
             ITrainingPackageRepository trainingPackageRepository,
             IBookingRepository bookingRepository,
+            ITrainingSessionRepository trainingSessionRepository,
             IPaymentRepository paymentRepository,
             IPayOsService payOsService,
             ICoachWalletRepository coachWalletRepository,
@@ -50,6 +52,7 @@ namespace SporticoApp.Application.Services
         {
             _trainingPackageRepository = trainingPackageRepository;
             _bookingRepository = bookingRepository;
+            _trainingSessionRepository = trainingSessionRepository;
             _paymentRepository = paymentRepository;
             _payOsService = payOsService;
             _coachWalletRepository = coachWalletRepository;
@@ -132,6 +135,11 @@ namespace SporticoApp.Application.Services
                     "You cannot purchase your own training package");
             }
 
+            // New flow: every package session must still have a free seat. Reserve one seat per
+            // scheduled session, then auto-create the sessions — the learner never books manually.
+            var slots = await _trainingPackageRepository.GetSessionSlotsForUpdateAsync(trainingPackage.Id);
+            ReserveSlots(slots);
+
             var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.Active);
             booking.PaidAt = DateTime.UtcNow;
             booking.ExpiresAt = booking.PaidAt.Value.AddDays(trainingPackage.DurationDays);
@@ -151,6 +159,12 @@ namespace SporticoApp.Application.Services
 
             await _bookingRepository.AddWithoutSaveAsync(booking);
             await _paymentRepository.AddWithoutSaveAsync(payment);
+
+            // Auto-create one scheduled training session per package slot. Booking insert + slot
+            // reservation + session inserts share the one scoped DbContext, so this single
+            // SaveChanges persists everything atomically and asserts the slot Version tokens
+            // (no overselling under concurrent purchases).
+            await GenerateSessionsAsync(booking, slots);
             await _bookingRepository.SaveChangesAsync();
 
             await EnsureBookingActivatedAsync(booking, true);
@@ -201,6 +215,12 @@ namespace SporticoApp.Application.Services
                     ErrorCodes.Forbidden,
                     "You cannot purchase your own training package");
             }
+
+            // Reserve a seat per scheduled session up-front so a pending payment cannot be oversold.
+            // Reserved seats are released if the payment is later cancelled / failed / expired, and
+            // the booked sessions are generated only once the payment is confirmed paid.
+            var slots = await _trainingPackageRepository.GetSessionSlotsForUpdateAsync(trainingPackage.Id);
+            ReserveSlots(slots);
 
             var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.PendingPayment);
 
@@ -321,10 +341,15 @@ namespace SporticoApp.Application.Services
                 if (bookingId.HasValue)
                 {
                     var booking = await _bookingRepository.GetByIdForUpdateAsync(bookingId.Value);
-                    if (booking != null)
+
+                    // Only the first pending→cancelled transition releases the reserved seats, so
+                    // repeated webhook calls cannot release a slot more than once.
+                    if (booking != null && booking.Status == BookingStatuses.PendingPayment)
                     {
                         booking.Status = BookingStatuses.Cancelled;
                         booking.CancelledAt = DateTime.UtcNow;
+                        booking.UpdatedAt = DateTime.UtcNow;
+                        ReleaseReservedSlots(booking);
                     }
                 }
 
@@ -443,6 +468,7 @@ namespace SporticoApp.Application.Services
                     booking.Status = BookingStatuses.Cancelled;
                     booking.CancelledAt = DateTime.UtcNow;
                     booking.UpdatedAt = DateTime.UtcNow;
+                    ReleaseReservedSlots(booking);
                 }
 
                 await _bookingRepository.SaveChangesAsync();
@@ -611,6 +637,107 @@ namespace SporticoApp.Application.Services
         }
 
         /// <summary>
+        /// Capacity gate + seat reservation for the new purchase flow. Rejects the whole purchase if
+        /// the package has no schedule, or if ANY scheduled session is already full. Otherwise consumes
+        /// one seat on every session slot (bumping the optimistic concurrency token so the last seat
+        /// cannot be sold twice under concurrent purchases). Mutates the tracked slots in place; the
+        /// caller commits them in its unit of work.
+        /// </summary>
+        private static void ReserveSlots(IReadOnlyList<TrainingPackageSessionSlot> slots)
+        {
+            if (slots == null || slots.Count == 0)
+            {
+                throw new ConflictException(
+                    ErrorCodes.TrainingPackageHasNoSchedule,
+                    "This training package has no scheduled sessions and cannot be purchased");
+            }
+
+            foreach (var slot in slots)
+            {
+                if (slot.Status == TrainingPackageSessionSlotStatuses.Cancelled ||
+                    slot.BookedParticipants >= slot.MaxParticipants)
+                {
+                    throw new ConflictException(
+                        ErrorCodes.TrainingPackageSessionSlotFull,
+                        $"Session {slot.SessionNumber} is full and cannot be booked");
+                }
+            }
+
+            var now = DateTime.UtcNow;
+            foreach (var slot in slots)
+            {
+                slot.BookedParticipants++;
+                slot.Status = slot.BookedParticipants >= slot.MaxParticipants
+                    ? TrainingPackageSessionSlotStatuses.Full
+                    : TrainingPackageSessionSlotStatuses.Open;
+                slot.Version++;
+                slot.UpdatedAt = now;
+            }
+        }
+
+        /// <summary>
+        /// Releases the seats reserved by a pending booking when its payment is cancelled / failed /
+        /// expired. Guarded by the caller so it runs only on the first pending→cancelled transition.
+        /// </summary>
+        private static void ReleaseReservedSlots(Booking booking)
+        {
+            var slots = booking.TrainingPackage?.SessionSlots;
+            if (slots == null)
+            {
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            foreach (var slot in slots)
+            {
+                if (slot.BookedParticipants <= 0)
+                {
+                    continue;
+                }
+
+                slot.BookedParticipants--;
+                if (slot.Status != TrainingPackageSessionSlotStatuses.Cancelled)
+                {
+                    slot.Status = TrainingPackageSessionSlotStatuses.Open;
+                }
+
+                slot.Version++;
+                slot.UpdatedAt = now;
+            }
+        }
+
+        /// <summary>
+        /// Auto-creates one scheduled training session per package slot for the booking. Idempotent:
+        /// a no-op if the booking already has generated sessions (so repeated webhook/reconcile calls
+        /// never duplicate sessions). Adds the sessions to the unit of work without saving.
+        /// </summary>
+        private async Task GenerateSessionsAsync(Booking booking, IEnumerable<TrainingPackageSessionSlot>? slots)
+        {
+            if (slots == null)
+            {
+                return;
+            }
+
+            var slotList = slots.ToList();
+            if (slotList.Count == 0)
+            {
+                return;
+            }
+
+            if (await _trainingSessionRepository.HasPackageGeneratedSessionsAsync(booking.Id))
+            {
+                return;
+            }
+
+            var sessions = slotList
+                .OrderBy(s => s.SessionNumber)
+                .Select(slot => slot.ToGeneratedSession(booking))
+                .ToList();
+
+            await _trainingSessionRepository.AddRangeWithoutSaveAsync(sessions);
+        }
+
+        /// <summary>
         /// Shared, idempotent activation for a paid booking. Safe to call from both the
         /// PayOS webhook and the reconcile endpoint; if the booking is already active it
         /// performs no duplicate side effects (no extra notifications, wallet creation, etc.).
@@ -647,11 +774,21 @@ namespace SporticoApp.Application.Services
                 booking.ExpiresAt = booking.PaidAt.Value.AddDays(booking.TrainingPackage.DurationDays);
                 booking.UpdatedAt = paidAt;
 
+                // Bump the optimistic concurrency token so two activations racing (webhook + reconcile)
+                // cannot both create the generated sessions — the loser's SaveChanges raises a
+                // concurrency conflict (surfaced as 409) rather than violating the unique session index.
+                booking.Version++;
+
+                // Auto-create one scheduled training session per reserved package slot (idempotent —
+                // skipped if this booking already has generated sessions). Seats were already reserved
+                // when the pending payment was created, so no further reservation happens here.
+                await GenerateSessionsAsync(booking, booking.TrainingPackage.SessionSlots);
+
                 // Side effect: ensure the coach wallet exists (idempotent).
                 await EnsureCoachWalletAsync(booking.CoachId);
             }
 
-            // Persist payment + booking (and any logged PaymentTransaction) in one save.
+            // Persist payment + booking + generated sessions (and any logged PaymentTransaction) in one save.
             await _bookingRepository.SaveChangesAsync();
 
             // Side effect: notifications — only on the first transition to active.
@@ -696,7 +833,7 @@ namespace SporticoApp.Application.Services
                     Id = Guid.NewGuid(),
                     UserId = booking.LearnerId,
                     Title = "Your booking is active",
-                    Content = "You can now request training sessions",
+                    Content = "Your training sessions have been scheduled",
                     Type = NotificationTypeConstants.Booking,
                     CreatedAt = DateTime.UtcNow
                 }

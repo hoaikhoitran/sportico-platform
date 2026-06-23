@@ -220,6 +220,12 @@ internal sealed class FakeTrainingPackageRepository : ITrainingPackageRepository
     public Task<TrainingPackage?> GetByIdAsync(Guid id)
         => Task.FromResult(Stored != null && Stored.Id == id ? Stored : null);
 
+    public Task<List<TrainingPackageSessionSlot>> GetSessionSlotsForUpdateAsync(Guid packageId)
+        => Task.FromResult(
+            Stored != null && Stored.Id == packageId && Stored.SessionSlots != null
+                ? Stored.SessionSlots.OrderBy(s => s.SessionNumber).ToList()
+                : new List<TrainingPackageSessionSlot>());
+
     public Task<TrainingPackage?> GetByIdWithCoachAsync(Guid id) => throw new NotImplementedException();
     public Task<(List<TrainingPackage> Items, int TotalCount)> GetPagedWithCoachAsync(TrainingPackageFilterRequest filter) => throw new NotImplementedException();
     public Task<TrainingPackage?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
@@ -229,4 +235,48 @@ internal sealed class FakeTrainingPackageRepository : ITrainingPackageRepository
     public Task AddAsync(TrainingPackage trainingPackage) => throw new NotImplementedException();
     public Task AddWithoutSaveAsync(TrainingPackage trainingPackage) => throw new NotImplementedException();
     public Task SaveChangesAsync() => Task.CompletedTask;
+}
+
+/// <summary>
+/// Training-session repository stub for booking-purchase flow tests. Captures auto-generated
+/// sessions and reports them through the idempotency check so repeated activations are no-ops.
+/// </summary>
+internal sealed class FakeTrainingSessionRepository : ITrainingSessionRepository
+{
+    public readonly List<TrainingSession> Added = new();
+
+    public Task<bool> HasPackageGeneratedSessionsAsync(Guid bookingId)
+        => Task.FromResult(Added.Any(s => s.BookingId == bookingId && s.TrainingPackageSessionSlotId != null));
+
+    public Task AddRangeWithoutSaveAsync(IEnumerable<TrainingSession> sessions)
+    {
+        Added.AddRange(sessions);
+        return Task.CompletedTask;
+    }
+
+    public Task AddWithoutSaveAsync(TrainingSession session)
+    {
+        Added.Add(session);
+        return Task.CompletedTask;
+    }
+
+    public Task AddAsync(TrainingSession session)
+    {
+        Added.Add(session);
+        return Task.CompletedTask;
+    }
+
+    public Task SaveChangesAsync() => Task.CompletedTask;
+
+    public Task<TrainingSession?> GetByIdAsync(Guid id) => throw new NotImplementedException();
+    public Task<TrainingSession?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
+    public Task<(List<TrainingSession> Items, int TotalCount)> GetByBookingPagedAsync(Guid bookingId, SporticoApp.Application.DTOs.TrainingSessions.TrainingSessionFilterRequest filter) => throw new NotImplementedException();
+    public Task<int> CountByBookingAsync(Guid bookingId, List<string> statuses) => throw new NotImplementedException();
+    public Task<IReadOnlyDictionary<string, int>> GetStatusCountsByBookingAsync(Guid bookingId) => throw new NotImplementedException();
+    public Task<IReadOnlyDictionary<Guid, IReadOnlyDictionary<string, int>>> GetStatusCountsByBookingsAsync(IReadOnlyCollection<Guid> bookingIds) => throw new NotImplementedException();
+    public Task<int> CountActiveByAvailabilitySlotIdAsync(Guid slotId, IEnumerable<string> statuses, Guid? excludeSessionId = null) => throw new NotImplementedException();
+    public Task<IReadOnlyDictionary<Guid, int>> CountActiveByAvailabilitySlotIdsAsync(IReadOnlyCollection<Guid> slotIds, IEnumerable<string> statuses) => throw new NotImplementedException();
+    public Task<bool> HasOverlapAsync(Guid userId, DateTime startTime, DateTime endTime, List<string> activeStatuses) => throw new NotImplementedException();
+    public Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByLearnerAsync(Guid learnerId, SporticoApp.Application.DTOs.TrainingSessions.TrainingSessionFilterRequest filter) => throw new NotImplementedException();
+    public Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByCoachAsync(Guid coachId, SporticoApp.Application.DTOs.TrainingSessions.TrainingSessionFilterRequest filter) => throw new NotImplementedException();
 }

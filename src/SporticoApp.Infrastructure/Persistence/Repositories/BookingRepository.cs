@@ -28,6 +28,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             return await _context.Bookings
                 .Include(x => x.TrainingPackage)
+                    .ThenInclude(p => p.SessionSlots)
                 .FirstOrDefaultAsync(x => x.Id == id);
         }
 
@@ -165,11 +166,13 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             }
             catch (DbUpdateConcurrencyException)
             {
-                // CoachWallet.Version optimistic concurrency: two concurrent session completions
-                // for the same coach collide here. Surface as 409 so the caller can retry.
+                // Optimistic concurrency clash on a Version-tokened entity sharing this unit of work:
+                //   - CoachWallet.Version: two concurrent session completions for the same coach.
+                //   - TrainingPackageSessionSlot.Version: two learners buying the last seat at once.
+                // Surface as a retryable 409 rather than a 500.
                 throw new ConflictException(
-                    ErrorCodes.InsufficientWalletBalance,
-                    "A concurrent wallet update was detected. Please try again.");
+                    ErrorCodes.ConcurrencyConflict,
+                    "A concurrent update was detected. Please try again.");
             }
         }
 

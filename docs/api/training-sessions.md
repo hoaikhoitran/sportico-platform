@@ -8,14 +8,30 @@ Controller: `TrainingSessionsController`. Mixed routes (booking-scoped, session-
 
 ---
 
-## Coach availability slots (prerequisite)
-Before a learner can book a session, the coach must publish availability slots.
+## Two ways a session exists
+
+1. **Auto-created from the package schedule (new, default flow).** When a learner purchases a package
+   with a fixed schedule, the system auto-creates one `TrainingSession` (status `scheduled`) per
+   `TrainingPackageSessionSlot`, with `bookingId`, `learnerId`, `coachId`, `trainingPackageSessionSlotId`,
+   `startTime`, `endTime`, `location`, `meetingUrl` populated. The learner does **not** request these.
+   They appear in the booking, learner and coach session lists immediately.
+2. **Learner-requested from an availability slot (legacy flow, still supported).** The endpoints below
+   beginning with `POST /api/bookings/{bookingId}/sessions` remain for availability-slot bookings.
+
+Both kinds are completed the same way by the coach (per-session wallet credit). The learner-overlap
+rule applies only to the legacy request flow, never to purchase-generated sessions.
+
+---
+
+## Coach availability slots (prerequisite for the legacy request flow)
+For the legacy flow, the coach must publish availability slots first.
 See [Coach Availability Slots](#coach-availability-slots) section below.
 
 ---
 
-## POST /api/bookings/{bookingId}/sessions  — learner requests a session
+## POST /api/bookings/{bookingId}/sessions  — learner requests a session (legacy availability-slot flow)
 - **Role**: `learner` (must own the booking).
+- **Note**: not used by the new package-schedule flow (sessions are auto-created on purchase).
 - **Body** (`CreateTrainingSessionRequest`):
 ```json
 {
@@ -146,6 +162,7 @@ available ──(coach cancels, no sessions)─► cancelled
 ```json
 {
   "id": "guid", "bookingId": "guid", "learnerId": "guid", "coachId": "guid",
+  "trainingPackageSessionSlotId": "guid|null",
   "startTime": "date", "endTime": "date", "status": "scheduled",
   "meetingUrl": "...|null", "location": "...|null",
   "learnerNote": "...|null", "coachNote": "...|null",

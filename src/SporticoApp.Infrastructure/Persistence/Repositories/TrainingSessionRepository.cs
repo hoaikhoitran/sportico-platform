@@ -147,6 +147,19 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .AnyAsync(x => startTime < x.EndTime && endTime > x.StartTime);
         }
 
+        public async Task<bool> HasPackageGeneratedSessionsAsync(Guid bookingId)
+        {
+            return await _context.TrainingSessions
+                .AsNoTracking()
+                .AnyAsync(x => x.BookingId == bookingId && x.TrainingPackageSessionSlotId != null);
+        }
+
+        public Task AddRangeWithoutSaveAsync(IEnumerable<TrainingSession> sessions)
+        {
+            _context.TrainingSessions.AddRange(sessions);
+            return Task.CompletedTask;
+        }
+
         public async Task<(List<TrainingSession> Items, int TotalCount)> GetPagedByLearnerAsync(
             Guid learnerId,
             TrainingSessionFilterRequest filter)

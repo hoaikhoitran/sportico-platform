@@ -22,7 +22,18 @@ public partial class TrainingPackage
 
     public int SessionCount { get; set; }
 
+    /// <summary>
+    /// Legacy-compatible field. The new flow is start/end-date based; this is derived from
+    /// <see cref="StartDate"/>..<see cref="EndDate"/> on create/update and kept only so existing
+    /// booking-expiry logic and old data continue to work.
+    /// </summary>
     public int DurationDays { get; set; }
+
+    /// <summary>First calendar day the package schedule may span (new start/end-date model).</summary>
+    public DateTime StartDate { get; set; }
+
+    /// <summary>Last calendar day the package schedule may span (new start/end-date model).</summary>
+    public DateTime EndDate { get; set; }
 
     public string? Location { get; set; }
 
@@ -52,4 +63,8 @@ public partial class TrainingPackage
     public virtual Sport Sport { get; set; } = null!;
 
     public virtual ICollection<Booking> Bookings { get; set; } = new List<Booking>();
+
+    /// <summary>The fixed schedule of sessions the coach defined when creating the package.</summary>
+    public virtual ICollection<TrainingPackageSessionSlot> SessionSlots { get; set; }
+        = new List<TrainingPackageSessionSlot>();
 }

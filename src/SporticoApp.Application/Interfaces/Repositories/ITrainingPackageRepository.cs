@@ -21,6 +21,12 @@ namespace SporticoApp.Application.Interfaces.Repositories
         Task<(List<TrainingPackage> Items, int TotalCount)> GetPagedAsync(
             TrainingPackageFilterRequest filter);
 
+        /// <summary>
+        /// Loads the package's schedule slots tracked and ordered by session number, for capacity
+        /// reservation/release during purchase. Empty list when the package has no schedule.
+        /// </summary>
+        Task<List<TrainingPackageSessionSlot>> GetSessionSlotsForUpdateAsync(Guid packageId);
+
         Task AddAsync(TrainingPackage trainingPackage);
 
         Task AddWithoutSaveAsync(TrainingPackage trainingPackage);

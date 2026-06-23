@@ -29,9 +29,11 @@ public class PlatformFeeMathTests
             Price = price,
             Status = TrainingPackageStatuses.Published
         };
+        package.SessionSlots = BookingPaymentFlowTests.BuildSlots(package.Id, package.SessionCount);
         var svc = new BookingService(
             new FakeTrainingPackageRepository(package),
             new FakeBookingRepository(),
+            new FakeTrainingSessionRepository(),
             new FakePaymentRepository(),
             new FakePayOsService(),
             new FakeCoachWalletRepository(),

@@ -252,6 +252,8 @@ public class TrainingSessionCreateTests
             => Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
         public Task<bool> HasOverlapAsync(Guid userId, DateTime s, DateTime e, List<string> st)
             => Task.FromResult(OverlapUserId.HasValue && userId == OverlapUserId.Value);
+        public Task<bool> HasPackageGeneratedSessionsAsync(Guid bookingId) => Task.FromResult(false);
+        public Task AddRangeWithoutSaveAsync(IEnumerable<TrainingSession> sessions) => Task.CompletedTask;
         public Task AddAsync(TrainingSession session)
         {
             if (AddThrowsConflict)

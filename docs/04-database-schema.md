@@ -46,6 +46,15 @@ Wallet balances (`coach_wallets`) and transaction amounts are likewise decimal. 
 ### training_packages
 - Indexes: coach, sport, status, created_at (desc), plus a **filtered index** `idx_training_packages_published` on `status` where `status = 'published'` (fast public listing).
 - `status` defaults to `'pending'`.
+- `start_date` / `end_date` (added by migration `AddTrainingPackageScheduledSessions`, default `now()` to backfill legacy rows). `duration_days` is now derived from these.
+
+### training_package_session_slots (added by `AddTrainingPackageScheduledSessions`)
+- The fixed schedule of a package: `training_package_id` (FK → training_packages, **Cascade**), `session_number`, `start_time`, `end_time`, `level`, `location`, `is_online`, `meeting_url`, `note`, `max_participants` (default 1), `booked_participants` (default 0), `status` (`open|full|cancelled`, default `'open'`), `version` (optimistic-concurrency token, default 0).
+- Indexes: `idx_training_package_session_slots_package`, `idx_training_package_session_slots_status`, and a **unique** index `uq_training_package_session_slots_package_number` on `(training_package_id, session_number)`.
+
+### training_sessions
+- `training_package_session_slot_id` (added by `AddTrainingPackageScheduledSessions`, nullable; FK → training_package_session_slots, **SetNull**) links a purchase-generated session to its package slot.
+- Index `ix_training_sessions_package_session_slot_id`, plus a **unique filtered** index `uq_training_sessions_booking_package_slot` on `(booking_id, training_package_session_slot_id)` where `training_package_session_slot_id IS NOT NULL` — the idempotency backstop preventing duplicate generated sessions.
 
 ### payments
 - Unique index on `transaction_code`.
