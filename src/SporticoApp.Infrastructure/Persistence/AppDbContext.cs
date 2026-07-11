@@ -33,6 +33,7 @@ public class AppDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Package> Packages => Set<Package>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PostImage> PostImages => Set<PostImage>();
     public DbSet<Post> Posts => Set<Post>();

@@ -9,6 +9,36 @@ using SporticoApp.Core.Entities;
 
 namespace SporticoApp.Application.Tests.Payments;
 
+/// <summary>
+/// In-memory platform settings for booking tests. Defaults to the seeded 0% commission; set
+/// <see cref="Setting"/>.CommissionRate (or use the constructor) to simulate an admin-configured rate.
+/// </summary>
+internal sealed class FakePlatformSettingRepository : IPlatformSettingRepository
+{
+    public PlatformSetting Setting;
+    public int SaveCount;
+
+    public FakePlatformSettingRepository(decimal rate = 0m) => Setting = new PlatformSetting
+    {
+        Id = PlatformSetting.SingletonId,
+        CommissionRate = rate,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    public Task<decimal> GetCommissionRateAsync() => Task.FromResult(Setting.CommissionRate);
+
+    public Task<PlatformSetting> GetOrCreateAsync() => Task.FromResult(Setting);
+
+    public Task<PlatformSetting> GetOrCreateForUpdateAsync() => Task.FromResult(Setting);
+
+    public Task SaveChangesAsync()
+    {
+        SaveCount++;
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>FluentValidation stub that always passes — keeps service tests focused on logic.</summary>
 internal sealed class PassValidator<T> : AbstractValidator<T>
 {

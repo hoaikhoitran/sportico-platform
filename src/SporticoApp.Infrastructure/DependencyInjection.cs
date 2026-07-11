@@ -67,6 +67,7 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<IReviewRepository, ReviewRepository>();
             services.AddScoped<IReviewReportRepository, ReviewReportRepository>();
             services.AddScoped<IDashboardRepository, DashboardRepository>();
+            services.AddScoped<IPlatformSettingRepository, PlatformSettingRepository>();
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
