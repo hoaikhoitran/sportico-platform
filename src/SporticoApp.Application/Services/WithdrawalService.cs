@@ -129,7 +129,7 @@ namespace SporticoApp.Application.Services
             // ── Reserve funds: AvailableBalance → PendingBalance ─────────────
             // This is NOT an additional platform fee.
             // It is a hold so the coach cannot withdraw the same funds twice.
-            // Platform commission (15%) was already deducted at booking purchase.
+            // The booking's snapshotted platform commission was already deducted at booking purchase.
             wallet.AvailableBalance -= request.Amount;
             wallet.PendingBalance += request.Amount;
             wallet.UpdatedAt = DateTime.UtcNow;

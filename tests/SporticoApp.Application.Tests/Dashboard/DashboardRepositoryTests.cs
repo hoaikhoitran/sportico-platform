@@ -164,6 +164,24 @@ public class DashboardRepositoryTests
         Assert.Equal(800m, d.TotalWithdrawnPaid);  // 500 + 300
     }
 
+    // Mixed-commission history: platform revenue is the sum of each booking's SNAPSHOTTED
+    // PlatformFeeAmount (an old 15% booking + a new 0% booking), never the latest platform setting.
+    [Fact]
+    public async Task AdminDashboard_MixedCommissionRates_SumsSnapshottedFees()
+    {
+        await using var ctx = NewContext();
+        ctx.Bookings.AddRange(
+            Booking(Coach, BookingStatuses.Completed, total: 1_000_000m, fee: 150_000m, coachReceive: 850_000m, paid: true), // legacy 15%
+            Booking(Coach, BookingStatuses.Active, total: 500_000m, fee: 0m, coachReceive: 500_000m, paid: true));          // new 0%
+        await ctx.SaveChangesAsync();
+
+        var d = await new DashboardRepository(ctx).GetAdminDashboardAsync(null, null);
+
+        Assert.Equal(1_500_000m, d.GrossRevenue);
+        Assert.Equal(150_000m, d.PlatformFeeRevenue); // 150,000 + 0 — snapshots, not the current setting
+        Assert.Equal(1_350_000m, d.CoachPayable);     // 850,000 + 500,000
+    }
+
     private static TrainingPackage Package(string status)
         => new()
         {

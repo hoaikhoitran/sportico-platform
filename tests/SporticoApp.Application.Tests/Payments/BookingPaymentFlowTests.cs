@@ -115,6 +115,7 @@ public class BookingPaymentFlowTests
             payos,
             wallets,
             notifications,
+            new FakePlatformSettingRepository(),
             new FakeBookingSessionUsageService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,
             Microsoft.Extensions.Options.Options.Create(new SporticoApp.Application.Options.FeatureOptions { EnableManualPurchase = true }),
@@ -168,6 +169,7 @@ public class BookingPaymentFlowTests
             new FakePayOsService(),
             new FakeCoachWalletRepository(),
             new FakeNotificationRepository(),
+            new FakePlatformSettingRepository(),
             new FakeBookingSessionUsageService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BookingService>.Instance,
             Microsoft.Extensions.Options.Options.Create(new SporticoApp.Application.Options.FeatureOptions { EnableManualPurchase = true }),
@@ -184,6 +186,11 @@ public class BookingPaymentFlowTests
 
         var createdBooking = Assert.Single(bookings.Added);
         Assert.Equal(BookingStatuses.PendingPayment, createdBooking.Status);
+
+        // Default (seeded) commission is 0% — the PayOS path snapshots it like the manual path.
+        Assert.Equal(0m, createdBooking.PlatformFeeRate);
+        Assert.Equal(0m, createdBooking.PlatformFeeAmount);
+        Assert.Equal(createdBooking.TotalAmount, createdBooking.CoachReceiveAmount);
 
         var createdPayment = Assert.Single(payments.Added);
         Assert.Equal(PaymentStatuses.Pending, createdPayment.Status);

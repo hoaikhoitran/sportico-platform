@@ -19,8 +19,6 @@ namespace SporticoApp.Application.Services
 
     public class BookingService : IBookingService
     {
-        private const decimal PlatformFeeRate = 0.15m;
-
         private readonly ITrainingPackageRepository _trainingPackageRepository;
         private readonly IBookingRepository _bookingRepository;
         private readonly ITrainingSessionRepository _trainingSessionRepository;
@@ -28,6 +26,7 @@ namespace SporticoApp.Application.Services
         private readonly IPayOsService _payOsService;
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
+        private readonly IPlatformSettingRepository _platformSettingRepository;
         private readonly IBookingSessionUsageService _sessionUsageService;
         private readonly ILogger<BookingService> _logger;
         private readonly bool _enableManualPurchase;
@@ -43,6 +42,7 @@ namespace SporticoApp.Application.Services
             IPayOsService payOsService,
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
+            IPlatformSettingRepository platformSettingRepository,
             IBookingSessionUsageService sessionUsageService,
             ILogger<BookingService> logger,
             IOptions<FeatureOptions> featureOptions,
@@ -57,6 +57,7 @@ namespace SporticoApp.Application.Services
             _payOsService = payOsService;
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
+            _platformSettingRepository = platformSettingRepository;
             _sessionUsageService = sessionUsageService;
             _logger = logger;
             _enableManualPurchase = featureOptions.Value.EnableManualPurchase;
@@ -140,7 +141,11 @@ namespace SporticoApp.Application.Services
             var slots = await _trainingPackageRepository.GetSessionSlotsForUpdateAsync(trainingPackage.Id);
             ReserveSlots(slots);
 
-            var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.Active);
+            // Commission is read from the persisted platform setting ONLY here, when the snapshot is
+            // created — never again during activation, completion, or withdrawal.
+            var commissionRate = await _platformSettingRepository.GetCommissionRateAsync();
+
+            var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.Active, commissionRate);
             booking.PaidAt = DateTime.UtcNow;
             booking.ExpiresAt = booking.PaidAt.Value.AddDays(trainingPackage.DurationDays);
 
@@ -222,7 +227,10 @@ namespace SporticoApp.Application.Services
             var slots = await _trainingPackageRepository.GetSessionSlotsForUpdateAsync(trainingPackage.Id);
             ReserveSlots(slots);
 
-            var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.PendingPayment);
+            // Snapshot the CURRENT persisted commission at purchase time (see PurchaseManualAsync).
+            var commissionRate = await _platformSettingRepository.GetCommissionRateAsync();
+
+            var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.PendingPayment, commissionRate);
 
             var orderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -591,12 +599,19 @@ namespace SporticoApp.Application.Services
             return Result<BookingResponse>.Success(booking.ToResponse(usage));
         }
 
-        private Booking CreateBookingSnapshot(
+        /// <summary>
+        /// Builds the immutable financial snapshot for a NEW booking from the commission rate that
+        /// is current at purchase time. After creation the booking's own PlatformFeeRate is the
+        /// historical source of truth — later changes to the platform setting never touch it.
+        /// </summary>
+        private static Booking CreateBookingSnapshot(
             Core.Entities.TrainingPackage trainingPackage,
             Guid learnerId,
-            string status)
+            string status,
+            decimal commissionRate)
         {
-            if (PlatformFeeRate <= 0 || PlatformFeeRate >= 1)
+            // 0% (free) up to 100% are valid; only out-of-range values are rejected.
+            if (commissionRate < 0 || commissionRate > 1)
             {
                 throw new FailureException(
                     ErrorCodes.InvalidCommissionRate,
@@ -605,7 +620,7 @@ namespace SporticoApp.Application.Services
 
             var now = DateTime.UtcNow;
             var totalAmount = trainingPackage.Price;
-            var platformFeeAmount = totalAmount * PlatformFeeRate;
+            var platformFeeAmount = totalAmount * commissionRate;
             var coachReceiveAmount = totalAmount - platformFeeAmount;
             var totalSessions = trainingPackage.SessionCount;
             var perSessionAmount = totalSessions > 0
@@ -619,7 +634,7 @@ namespace SporticoApp.Application.Services
                 CoachId = trainingPackage.CoachId,
                 TrainingPackageId = trainingPackage.Id,
                 TotalAmount = totalAmount,
-                PlatformFeeRate = PlatformFeeRate,
+                PlatformFeeRate = commissionRate,
                 PlatformFeeAmount = platformFeeAmount,
                 CoachReceiveAmount = coachReceiveAmount,
                 PerSessionCoachAmount = perSessionAmount,
