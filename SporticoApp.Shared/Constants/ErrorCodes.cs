@@ -203,6 +203,11 @@ namespace SporticoApp.Shared.Constants
         public const string NotificationNotFound =
             "NOTIFICATION_NOT_FOUND";
 
+        // Platform settings
+        /// <summary>The platform_settings storage is missing/unmigrated — an ops issue, not user error.</summary>
+        public const string PlatformSettingsUnavailable =
+            "PLATFORM_SETTINGS_UNAVAILABLE";
+
         // Payment
         public const string InvalidCommissionRate =
             "INVALID_COMMISSION_RATE";
