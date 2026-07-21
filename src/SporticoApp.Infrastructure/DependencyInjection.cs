@@ -68,6 +68,13 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<IReviewReportRepository, ReviewReportRepository>();
             services.AddScoped<IDashboardRepository, DashboardRepository>();
             services.AddScoped<IPlatformSettingRepository, PlatformSettingRepository>();
+            services.AddScoped<IAdminPaymentRepository, AdminPaymentRepository>();
+            services.AddScoped<IVisitorTrackingRepository, VisitorTrackingRepository>();
+            // Singleton: the Channel<T> buffer must be the SAME instance shared by every request
+            // (producer) and the one background consumer — never scoped/transient.
+            services.AddSingleton<IVisitorTrackingQueue, VisitorTrackingQueue>();
+            services.AddScoped<IVisitorAnalyticsRepository, VisitorAnalyticsRepository>();
+            services.AddSingleton<IUserAgentParser, UserAgentParser>();
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
@@ -134,6 +141,9 @@ namespace SporticoApp.Infrastructure
             // when the "Features" section is absent.
             services.Configure<SporticoApp.Application.Options.FeatureOptions>(
                 configuration.GetSection("Features"));
+
+            services.Configure<SporticoApp.Application.Options.AnalyticsOptions>(
+                configuration.GetSection(SporticoApp.Application.Options.AnalyticsOptions.SectionName));
 
             return services;
         }

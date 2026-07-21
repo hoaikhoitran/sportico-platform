@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\SporticoApp.Api\SporticoApp.Api.csproj" />
     <ProjectReference Include="..\..\src\SporticoApp.Application\SporticoApp.Application.csproj" />
     <ProjectReference Include="..\..\src\SporticoApp.Core\SporticoApp.Core.csproj" />
     <ProjectReference Include="..\..\src\SporticoApp.Infrastructure\SporticoApp.Infrastructure.csproj" />
