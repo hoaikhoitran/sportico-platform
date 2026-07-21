@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
 
     public DbSet<AdvisoryConversation> AdvisoryConversations => Set<AdvisoryConversation>();
     public DbSet<AdvisoryMessage> AdvisoryMessages => Set<AdvisoryMessage>();
+    public DbSet<ApiRequestMetric> ApiRequestMetrics => Set<ApiRequestMetric>();
     public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
     public DbSet<CoachAvailabilitySlot> CoachAvailabilitySlots => Set<CoachAvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
@@ -32,6 +33,7 @@ public class AppDbContext : DbContext
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Package> Packages => Set<Package>();
+    public DbSet<PageView> PageViews => Set<PageView>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
     public DbSet<Payment> Payments => Set<Payment>();
@@ -52,6 +54,7 @@ public class AppDbContext : DbContext
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<User> Users => Set<User>();
     public DbSet<VCoach> VCoaches => Set<VCoach>();
+    public DbSet<VisitorSession> VisitorSessions => Set<VisitorSession>();
     public DbSet<VPublishedPost> VPublishedPosts => Set<VPublishedPost>();
     public DbSet<WithdrawalRequest> WithdrawalRequests => Set<WithdrawalRequest>();
 

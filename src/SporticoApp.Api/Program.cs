@@ -105,6 +105,10 @@ namespace SporticoApp.Api
                     SporticoApp.Application.Options.WithdrawalPayoutReconciliationOptions.SectionName));
             builder.Services.AddHostedService<SporticoApp.Api.BackgroundServices.WithdrawalPayoutReconciliationService>();
 
+            // Consumes visitor-tracking work items off the in-process queue (IVisitorTrackingQueue)
+            // so tracking writes happen off the HTTP request thread — see VisitorTrackingMiddleware.
+            builder.Services.AddHostedService<SporticoApp.Api.BackgroundServices.VisitorTrackingBackgroundService>();
+
             var jwtSecretKey = builder.Configuration["JWT:SecretKey"];
             var jwtIssuer = builder.Configuration["JWT:Issuer"];
             var jwtAudience = builder.Configuration["JWT:Audience"];
@@ -167,6 +171,11 @@ namespace SporticoApp.Api
             app.UseMiddleware<ExceptionMiddleware>();
 
             app.UseAuthentication();
+
+            // After authentication (so HttpContext.User is populated for logged-in visitors) and
+            // before authorization enforcement (so it runs for every request, including ones that
+            // later get a 401/403). Never blocks or fails the real request — see the middleware.
+            app.UseMiddleware<SporticoApp.Api.Middlewares.VisitorTrackingMiddleware>();
 
             app.UseAuthorization();
 

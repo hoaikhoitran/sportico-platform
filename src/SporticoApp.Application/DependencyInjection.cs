@@ -43,6 +43,9 @@ namespace SporticoApp.Application
             services.AddScoped<IAdminUserService, AdminUserService>();
             services.AddScoped<IUserPublicService, UserPublicService>();
             services.AddScoped<IPlatformSettingService, PlatformSettingService>();
+            services.AddScoped<IAdminPaymentService, AdminPaymentService>();
+            services.AddScoped<IVisitorTrackingService, VisitorTrackingService>();
+            services.AddScoped<IVisitorAnalyticsService, VisitorAnalyticsService>();
 
             services.AddValidatorsFromAssemblyContaining
                 <RegisterCoachRequestValidator>();
