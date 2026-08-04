@@ -13,5 +13,16 @@ namespace SporticoApp.Application.DTOs.Chat
         public bool IsRead { get; set; }
 
         public DateTime SentAt { get; set; }
+
+        public List<ChatMessageAttachmentResponse> Attachments { get; set; } = new();
+    }
+
+    public class ChatMessageAttachmentResponse
+    {
+        public Guid Id { get; set; }
+
+        public string FileUrl { get; set; } = string.Empty;
+
+        public string? FileType { get; set; }
     }
 }

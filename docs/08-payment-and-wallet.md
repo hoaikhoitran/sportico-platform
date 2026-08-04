@@ -2,31 +2,41 @@
 
 ## Commission Model
 
-The platform takes a **fixed 15% commission**. The rate is defined in `BookingService` as:
+> **Corrected**: this section previously described a fixed 15% commission hardcoded as a
+> `BookingService` constant. That constant was removed — the commission is now an
+> **admin-configurable rate** (default **0%**), persisted in the `platform_settings` table (see
+> `PlatformSetting`, `IPlatformSettingRepository`, `GET/PUT /api/admin/platform-settings/commission`).
+> `BookingService` reads the CURRENT rate exactly once, at the moment a new booking's financial
+> snapshot is created — never again afterward.
 
-```csharp
-private const decimal PlatformFeeRate = 0.15m;
-```
-
-When a booking is created (manual or PayOS), the commission math is **snapshotted onto the booking** so that later edits to the training package price do not affect a booking that has already been purchased.
+When a booking is created (manual or PayOS), the commission math is **snapshotted onto the booking** so that later edits to the training package price, OR later admin changes to the platform commission rate, never affect a booking that has already been purchased.
 
 ### Booking snapshot fields
 
+Since the **voucher** feature (see [`docs/api/vouchers.md`](api/vouchers.md)), a booking also snapshots
+an `OriginalAmount` (pre-discount) separately from `TotalAmount` (what the learner actually pays).
+`PlatformFeeAmount`/`CoachReceiveAmount`/`PerSessionCoachAmount` are always computed off
+`OriginalAmount`, so a platform-funded voucher discount never reduces the coach's earnings.
+
 | Field | Meaning | Formula |
 |---|---|---|
-| `TotalAmount` | Price charged to the learner | `TrainingPackage.Price` |
-| `PlatformFeeRate` | Commission rate captured at purchase | `0.15` |
-| `PlatformFeeAmount` | Platform's cut | `TotalAmount * PlatformFeeRate` |
-| `CoachReceiveAmount` | Coach's total earnable amount | `TotalAmount - PlatformFeeAmount` |
+| `OriginalAmount` | Package price before any voucher | `TrainingPackage.Price` |
+| `DiscountAmount` | Voucher discount (0 if none used) | see `vouchers.md` |
+| `TotalAmount` | Price actually charged to the learner | `max(0, OriginalAmount - DiscountAmount)` |
+| `PlatformFeeRate` | Commission rate captured at purchase, from `platform_settings` | e.g. `0.15` |
+| `PlatformFeeAmount` | Platform's gross fee | `OriginalAmount * PlatformFeeRate` |
+| `CoachReceiveAmount` | Coach's total earnable amount | `OriginalAmount - PlatformFeeAmount` (never reduced by a voucher) |
 | `TotalSessions` | Sessions in the package | `TrainingPackage.SessionCount` |
 | `PerSessionCoachAmount` | Coach earning per completed session | `CoachReceiveAmount / TotalSessions` (0 if no sessions) |
 | `CompletedSessions` | Running count, starts at 0 | incremented on each completion |
 
 ### Worked example
 
-Package price = 1,000,000, 8 sessions:
+Package price = 1,000,000, 8 sessions, admin-configured commission = 15%, no voucher:
 
 ```
+OriginalAmount       = 1,000,000
+DiscountAmount       = 0
 TotalAmount          = 1,000,000
 PlatformFeeRate      = 0.15
 PlatformFeeAmount    = 150,000
@@ -36,6 +46,11 @@ PerSessionCoachAmount= 106,250    (850,000 / 8)
 ```
 
 The coach earns **106,250 per completed session**, and the full 850,000 only after all 8 are completed.
+
+With a 100,000 platform-funded voucher applied to the same package: `TotalAmount` becomes 900,000
+(what the learner pays) but `PlatformFeeAmount`/`CoachReceiveAmount`/`PerSessionCoachAmount` above are
+**unchanged** — the platform's own net revenue absorbs the discount instead
+(`PlatformNetRevenue = TotalAmount - CoachReceiveAmount = 50,000`, down from `150,000`).
 
 > NOTE: `PerSessionCoachAmount` is stored at `numeric(12,2)`. When `CoachReceiveAmount` does not divide evenly by `TotalSessions`, rounding can leave a small residual versus `CoachReceiveAmount`. There is no explicit reconciliation of the rounding remainder in the reviewed code.
 

@@ -4,6 +4,9 @@
     {
         public const string PayOs = "payos";
         public const string Manual = "manual";
+
+        /// <summary>A 100%-off voucher fully covers the price — no gateway involved, internal-only.</summary>
+        public const string Voucher = "voucher";
     }
 
     public static class PaymentStatuses

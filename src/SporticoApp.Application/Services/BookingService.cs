@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.DTOs.Payments;
+using SporticoApp.Application.DTOs.Vouchers;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Application.Mappings;
@@ -27,6 +28,7 @@ namespace SporticoApp.Application.Services
         private readonly ICoachWalletRepository _coachWalletRepository;
         private readonly INotificationRepository _notificationRepository;
         private readonly IPlatformSettingRepository _platformSettingRepository;
+        private readonly IVoucherService _voucherService;
         private readonly IBookingSessionUsageService _sessionUsageService;
         private readonly ILogger<BookingService> _logger;
         private readonly bool _enableManualPurchase;
@@ -43,6 +45,7 @@ namespace SporticoApp.Application.Services
             ICoachWalletRepository coachWalletRepository,
             INotificationRepository notificationRepository,
             IPlatformSettingRepository platformSettingRepository,
+            IVoucherService voucherService,
             IBookingSessionUsageService sessionUsageService,
             ILogger<BookingService> logger,
             IOptions<FeatureOptions> featureOptions,
@@ -58,6 +61,7 @@ namespace SporticoApp.Application.Services
             _coachWalletRepository = coachWalletRepository;
             _notificationRepository = notificationRepository;
             _platformSettingRepository = platformSettingRepository;
+            _voucherService = voucherService;
             _sessionUsageService = sessionUsageService;
             _logger = logger;
             _enableManualPurchase = featureOptions.Value.EnableManualPurchase;
@@ -145,7 +149,12 @@ namespace SporticoApp.Application.Services
             // created — never again during activation, completion, or withdrawal.
             var commissionRate = await _platformSettingRepository.GetCommissionRateAsync();
 
-            var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.Active, commissionRate);
+            var bookingId = Guid.NewGuid();
+            var voucherReservation = await _voucherService.ReserveForBookingAsync(
+                learnerId, request.VoucherCode, trainingPackage.Id, trainingPackage.Price, bookingId);
+
+            var booking = CreateBookingSnapshot(
+                bookingId, trainingPackage, learnerId, BookingStatuses.Active, commissionRate, voucherReservation);
             booking.PaidAt = DateTime.UtcNow;
             booking.ExpiresAt = booking.PaidAt.Value.AddDays(trainingPackage.DurationDays);
 
@@ -154,7 +163,7 @@ namespace SporticoApp.Application.Services
                 Id = Guid.NewGuid(),
                 UserId = learnerId,
                 Amount = booking.TotalAmount,
-                Method = PaymentMethods.Manual,
+                Method = booking.TotalAmount <= 0m ? PaymentMethods.Voucher : PaymentMethods.Manual,
                 ReferenceType = PaymentReferenceTypes.Booking,
                 ReferenceId = booking.Id,
                 Status = PaymentStatuses.Paid,
@@ -170,6 +179,7 @@ namespace SporticoApp.Application.Services
             // SaveChanges persists everything atomically and asserts the slot Version tokens
             // (no overselling under concurrent purchases).
             await GenerateSessionsAsync(booking, slots);
+            await _voucherService.ApplyForBookingAsync(booking.Id, payment.Id);
             await _bookingRepository.SaveChangesAsync();
 
             await EnsureBookingActivatedAsync(booking, true);
@@ -230,8 +240,14 @@ namespace SporticoApp.Application.Services
             // Snapshot the CURRENT persisted commission at purchase time (see PurchaseManualAsync).
             var commissionRate = await _platformSettingRepository.GetCommissionRateAsync();
 
-            var booking = CreateBookingSnapshot(trainingPackage, learnerId, BookingStatuses.PendingPayment, commissionRate);
+            var bookingId = Guid.NewGuid();
+            var voucherReservation = await _voucherService.ReserveForBookingAsync(
+                learnerId, request.VoucherCode, trainingPackage.Id, trainingPackage.Price, bookingId);
 
+            var booking = CreateBookingSnapshot(
+                bookingId, trainingPackage, learnerId, BookingStatuses.PendingPayment, commissionRate, voucherReservation);
+
+            var isFullyDiscounted = booking.TotalAmount <= 0m;
             var orderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
             var payment = new Payment
@@ -239,31 +255,98 @@ namespace SporticoApp.Application.Services
                 Id = Guid.NewGuid(),
                 UserId = learnerId,
                 Amount = booking.TotalAmount,
-                Method = PaymentMethods.PayOs,
+                Method = isFullyDiscounted ? PaymentMethods.Voucher : PaymentMethods.PayOs,
                 ReferenceType = PaymentReferenceTypes.Booking,
                 ReferenceId = booking.Id,
                 Status = PaymentStatuses.Pending,
-                TransactionCode = orderCode.ToString(),
-                OrderCode = orderCode,
+                TransactionCode = isFullyDiscounted ? null : orderCode.ToString(),
+                OrderCode = isFullyDiscounted ? null : orderCode,
                 CreatedAt = booking.CreatedAt
             };
 
-            var payOsResult = await _payOsService.CreatePaymentLinkAsync(
-                new CreatePayOsPaymentRequest
+            // Step 1: persist the pending booking + payment + slot/voucher reservations FIRST and
+            // commit. Only once this is safely on disk do we call the external PayOS gateway — this
+            // way a gateway failure can never leave an orphaned PayOS checkout with no matching DB
+            // booking, and a DB failure never leaves a PayOS link the learner was never given.
+            await _bookingRepository.AddWithoutSaveAsync(booking);
+            await _paymentRepository.AddWithoutSaveAsync(payment);
+            await _bookingRepository.SaveChangesAsync();
+
+            // ── A voucher covering 100% of the price needs no payment gateway at all. ──
+            if (isFullyDiscounted)
+            {
+                payment.Status = PaymentStatuses.Paid;
+                payment.PaidAt = DateTime.UtcNow;
+
+                booking.Status = BookingStatuses.Active;
+                booking.PaidAt = DateTime.UtcNow;
+                booking.ExpiresAt = booking.PaidAt.Value.AddDays(trainingPackage.DurationDays);
+                booking.UpdatedAt = DateTime.UtcNow;
+
+                await GenerateSessionsAsync(booking, slots);
+                await _voucherService.ApplyForBookingAsync(booking.Id, payment.Id);
+                await _bookingRepository.SaveChangesAsync();
+
+                await EnsureCoachWalletAsync(booking.CoachId);
+                await SendBookingActivatedNotificationsAsync(booking);
+
+                // Attach for response mapping only, AFTER all saves — never before (see CreateBookingSnapshot note).
+                booking.TrainingPackage = trainingPackage;
+
+                return Result<PurchaseTrainingPackagePayOsResponse>.Success(new PurchaseTrainingPackagePayOsResponse
                 {
-                    OrderCode = orderCode,
-                    Amount = (int)booking.TotalAmount,
-                    Description = $"SPT{orderCode}",
-                    BuyerName = "Sportico Learner"
+                    BookingId = booking.Id,
+                    PaymentId = payment.Id,
+                    OrderCode = null,
+                    CheckoutUrl = null,
+                    Status = payment.Status,
+                    PaymentRequired = false,
+                    BookingStatus = booking.Status,
+                    ExpiredAt = null
                 });
+            }
+
+            // Step 2: now call PayOS. If it fails, the booking/payment were already committed as
+            // "pending" above, so we cleanly unwind them here rather than leaving a payment the
+            // learner can never complete.
+            CreatePayOsPaymentResult payOsResult;
+            try
+            {
+                payOsResult = await _payOsService.CreatePaymentLinkAsync(
+                    new CreatePayOsPaymentRequest
+                    {
+                        OrderCode = orderCode,
+                        Amount = (int)booking.TotalAmount,
+                        Description = $"SPT{orderCode}",
+                        BuyerName = "Sportico Learner"
+                    });
+            }
+            catch (Exception ex)
+            {
+                payment.Status = PaymentStatuses.Failed;
+                booking.Status = BookingStatuses.Cancelled;
+                booking.CancelledAt = DateTime.UtcNow;
+                booking.UpdatedAt = DateTime.UtcNow;
+                ReleaseReservedSlotsDirect(slots);
+                await _voucherService.ReleaseForBookingAsync(booking.Id, "payos_link_creation_failed");
+                await _bookingRepository.SaveChangesAsync();
+
+                _logger.LogError(
+                    ex,
+                    "PayOS CreatePaymentLinkAsync failed after booking {BookingId} was committed as pending; " +
+                    "booking cancelled and slot/voucher reservations released.",
+                    booking.Id);
+
+                throw new FailureException(
+                    ErrorCodes.PayOsCreatePaymentFailed,
+                    "Unable to create the PayOS payment link. Please try again.");
+            }
 
             payment.PaymentLinkId = payOsResult.PaymentLinkId;
             payment.CheckoutUrl = payOsResult.CheckoutUrl;
             payment.ExpiredAt = payOsResult.ExpiredAt;
 
-            await _bookingRepository.AddWithoutSaveAsync(booking);
-            await _paymentRepository.AddWithoutSaveAsync(payment);
-            await _bookingRepository.SaveChangesAsync();
+            await _paymentRepository.SaveChangesAsync();
 
             var response = new PurchaseTrainingPackagePayOsResponse
             {
@@ -272,6 +355,8 @@ namespace SporticoApp.Application.Services
                 OrderCode = orderCode,
                 CheckoutUrl = payOsResult.CheckoutUrl,
                 Status = payment.Status,
+                PaymentRequired = true,
+                BookingStatus = booking.Status,
                 ExpiredAt = payOsResult.ExpiredAt
             };
 
@@ -351,13 +436,16 @@ namespace SporticoApp.Application.Services
                     var booking = await _bookingRepository.GetByIdForUpdateAsync(bookingId.Value);
 
                     // Only the first pending→cancelled transition releases the reserved seats, so
-                    // repeated webhook calls cannot release a slot more than once.
+                    // repeated webhook calls cannot release a slot (or voucher) more than once.
                     if (booking != null && booking.Status == BookingStatuses.PendingPayment)
                     {
                         booking.Status = BookingStatuses.Cancelled;
                         booking.CancelledAt = DateTime.UtcNow;
                         booking.UpdatedAt = DateTime.UtcNow;
                         ReleaseReservedSlots(booking);
+                        await _voucherService.ReleaseForBookingAsync(
+                            booking.Id,
+                            status == "failed" ? "payment_failed" : "payment_cancelled");
                     }
                 }
 
@@ -477,6 +565,11 @@ namespace SporticoApp.Application.Services
                     booking.CancelledAt = DateTime.UtcNow;
                     booking.UpdatedAt = DateTime.UtcNow;
                     ReleaseReservedSlots(booking);
+                    await _voucherService.ReleaseForBookingAsync(
+                        booking.Id,
+                        string.Equals(payOsStatus, "EXPIRED", StringComparison.OrdinalIgnoreCase)
+                            ? "payment_expired"
+                            : "payment_cancelled");
                 }
 
                 await _bookingRepository.SaveChangesAsync();
@@ -599,16 +692,58 @@ namespace SporticoApp.Application.Services
             return Result<BookingResponse>.Success(booking.ToResponse(usage));
         }
 
+        public async Task<int> ReleaseExpiredPendingPaymentsAsync(int batchSize)
+        {
+            var bookingIds = await _bookingRepository.GetExpiredPendingPaymentBookingIdsAsync(DateTime.UtcNow, batchSize);
+
+            var released = 0;
+            foreach (var bookingId in bookingIds)
+            {
+                var booking = await _bookingRepository.GetByIdForUpdateAsync(bookingId);
+                // Re-check status: a concurrent webhook/reconcile call may have already resolved it.
+                if (booking == null || booking.Status != BookingStatuses.PendingPayment)
+                {
+                    continue;
+                }
+
+                var payment = await _paymentRepository.GetLatestByReferenceForUpdateAsync(
+                    PaymentReferenceTypes.Booking, bookingId);
+                if (payment == null || payment.Status != PaymentStatuses.Pending)
+                {
+                    continue;
+                }
+
+                payment.Status = PaymentStatuses.Failed;
+
+                booking.Status = BookingStatuses.Cancelled;
+                booking.CancelledAt = DateTime.UtcNow;
+                booking.UpdatedAt = DateTime.UtcNow;
+                ReleaseReservedSlots(booking);
+                await _voucherService.ReleaseForBookingAsync(booking.Id, "payment_expired");
+
+                await _bookingRepository.SaveChangesAsync();
+                released++;
+            }
+
+            return released;
+        }
+
         /// <summary>
-        /// Builds the immutable financial snapshot for a NEW booking from the commission rate that
-        /// is current at purchase time. After creation the booking's own PlatformFeeRate is the
-        /// historical source of truth — later changes to the platform setting never touch it.
+        /// Builds the immutable financial snapshot for a NEW booking from the commission rate and
+        /// (optional) voucher reservation current at purchase time. After creation the booking's own
+        /// fields are the historical source of truth — later changes to the platform setting or the
+        /// voucher campaign never touch it. The voucher discount is platform-funded: it reduces
+        /// TotalAmount (what the learner pays) and PlatformNetRevenue only — PlatformFeeAmount,
+        /// CoachReceiveAmount and PerSessionCoachAmount are always computed off the ORIGINAL package
+        /// price, never off the discounted total.
         /// </summary>
         private static Booking CreateBookingSnapshot(
+            Guid bookingId,
             Core.Entities.TrainingPackage trainingPackage,
             Guid learnerId,
             string status,
-            decimal commissionRate)
+            decimal commissionRate,
+            VoucherReservation? voucherReservation)
         {
             // 0% (free) up to 100% are valid; only out-of-range values are rejected.
             if (commissionRate < 0 || commissionRate > 1)
@@ -619,9 +754,11 @@ namespace SporticoApp.Application.Services
             }
 
             var now = DateTime.UtcNow;
-            var totalAmount = trainingPackage.Price;
-            var platformFeeAmount = totalAmount * commissionRate;
-            var coachReceiveAmount = totalAmount - platformFeeAmount;
+            var originalAmount = trainingPackage.Price;
+            var discountAmount = voucherReservation?.DiscountAmount ?? 0m;
+            var totalAmount = Math.Max(0m, originalAmount - discountAmount);
+            var platformFeeAmount = originalAmount * commissionRate;
+            var coachReceiveAmount = originalAmount - platformFeeAmount;
             var totalSessions = trainingPackage.SessionCount;
             var perSessionAmount = totalSessions > 0
                 ? coachReceiveAmount / totalSessions
@@ -629,11 +766,18 @@ namespace SporticoApp.Application.Services
 
             return new Booking
             {
-                Id = Guid.NewGuid(),
+                Id = bookingId,
                 LearnerId = learnerId,
                 CoachId = trainingPackage.CoachId,
                 TrainingPackageId = trainingPackage.Id,
                 TotalAmount = totalAmount,
+                OriginalAmount = originalAmount,
+                DiscountAmount = discountAmount,
+                VoucherCampaignId = voucherReservation?.VoucherCampaignId,
+                VoucherCodeSnapshot = voucherReservation?.CodeSnapshot,
+                VoucherDiscountTypeSnapshot = voucherReservation?.DiscountTypeSnapshot,
+                VoucherDiscountValueSnapshot = voucherReservation?.DiscountValueSnapshot,
+                VoucherMaxDiscountAmountSnapshot = voucherReservation?.MaxDiscountAmountSnapshot,
                 PlatformFeeRate = commissionRate,
                 PlatformFeeAmount = platformFeeAmount,
                 CoachReceiveAmount = coachReceiveAmount,
@@ -702,6 +846,16 @@ namespace SporticoApp.Application.Services
                 return;
             }
 
+            ReleaseReservedSlotsDirect(slots);
+        }
+
+        /// <summary>
+        /// Same release logic as <see cref="ReleaseReservedSlots"/> but operating directly on an
+        /// already-in-hand slot list — used right after purchase, before the booking has (or should
+        /// ever get) a tracked TrainingPackage navigation attached.
+        /// </summary>
+        private static void ReleaseReservedSlotsDirect(IEnumerable<TrainingPackageSessionSlot> slots)
+        {
             var now = DateTime.UtcNow;
             foreach (var slot in slots)
             {
@@ -798,6 +952,9 @@ namespace SporticoApp.Application.Services
                 // skipped if this booking already has generated sessions). Seats were already reserved
                 // when the pending payment was created, so no further reservation happens here.
                 await GenerateSessionsAsync(booking, booking.TrainingPackage.SessionSlots);
+
+                // Voucher redemption (if any) becomes permanent — idempotent no-op if already applied.
+                await _voucherService.ApplyForBookingAsync(booking.Id, payment.Id);
 
                 // Side effect: ensure the coach wallet exists (idempotent).
                 await EnsureCoachWalletAsync(booking.CoachId);

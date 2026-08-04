@@ -74,6 +74,7 @@ public class BookingScheduledSessionTests
             wallets,
             notifications,
             new FakePlatformSettingRepository(),
+            new FakeVoucherService(),
             new FakeBookingSessionUsageService(),
             NullLogger<BookingService>.Instance,
             Microsoft.Extensions.Options.Options.Create(new FeatureOptions { EnableManualPurchase = true }),

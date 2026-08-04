@@ -146,6 +146,26 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<List<Guid>> GetExpiredPendingPaymentBookingIdsAsync(DateTime nowUtc, int batchSize)
+        {
+            var expiredPaymentBookingIds = _context.Payments
+                .Where(p =>
+                    p.ReferenceType == PaymentReferenceTypes.Booking &&
+                    p.Status == PaymentStatuses.Pending &&
+                    p.Method == PaymentMethods.PayOs &&
+                    p.ExpiredAt != null &&
+                    p.ExpiredAt < nowUtc &&
+                    p.ReferenceId != null)
+                .Select(p => p.ReferenceId!.Value);
+
+            return await _context.Bookings
+                .Where(b => b.Status == BookingStatuses.PendingPayment && expiredPaymentBookingIds.Contains(b.Id))
+                .OrderBy(b => b.CreatedAt)
+                .Select(b => b.Id)
+                .Take(batchSize)
+                .ToListAsync();
+        }
+
         public async Task AddAsync(Booking booking)
         {
             _context.Bookings.Add(booking);

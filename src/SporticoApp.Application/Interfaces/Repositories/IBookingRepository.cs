@@ -34,6 +34,12 @@ namespace SporticoApp.Application.Interfaces.Repositories
             Guid learnerId,
             Guid coachId);
 
+        /// <summary>
+        /// Ids of PendingPayment bookings whose PayOS payment has an ExpiredAt in the past and is
+        /// still Pending (never resolved by webhook or reconcile) — candidates for the expiry sweep.
+        /// </summary>
+        Task<List<Guid>> GetExpiredPendingPaymentBookingIdsAsync(DateTime nowUtc, int batchSize);
+
         Task AddAsync(Booking booking);
 
         Task AddWithoutSaveAsync(Booking booking);

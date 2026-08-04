@@ -5,6 +5,7 @@ using SporticoApp.Shared.Exceptions;
 using SporticoApp.Shared.Responses;
 using SporticoApp.Shared.Enums;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace SporticoApp.Api.Middlewares;
@@ -83,6 +84,41 @@ public class ExceptionMiddleware
                     Message = ex.Message,
                     Type = ex.Type,
                     Details = ex.Details
+                }
+            };
+
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(
+                    response,
+                    _jsonOptions));
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // Two requests raced for the same limited resource (last seat, last voucher use, etc.):
+            // one wins, the other must retry — a clean 409, never a 500.
+            try
+            {
+                _logger.LogWarning(
+                    "Concurrency conflict. Message={ExceptionMessage} Path={Path}",
+                    ex.Message,
+                    context.Request.Path.Value);
+            }
+            catch
+            {
+                // Swallow logging failure — the HTTP response is written regardless.
+            }
+
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = 409;
+
+            var response = new Result<object>
+            {
+                IsSuccess = false,
+                Error = new Error
+                {
+                    Code = ErrorCodes.ConcurrencyConflict,
+                    Message = "This request conflicted with another concurrent request. Please try again.",
+                    Type = ErrorType.Conflict
                 }
             };
 

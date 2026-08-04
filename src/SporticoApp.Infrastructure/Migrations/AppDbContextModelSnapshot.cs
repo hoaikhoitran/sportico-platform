@@ -211,6 +211,13 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<decimal>("DiscountAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("discount_amount");
+
                     b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
@@ -218,6 +225,11 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Property<Guid>("LearnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("learner_id");
+
+                    b.Property<decimal>("OriginalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("original_amount");
 
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("timestamp with time zone")
@@ -275,6 +287,30 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("version");
 
+                    b.Property<Guid?>("VoucherCampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("voucher_campaign_id");
+
+                    b.Property<string>("VoucherCodeSnapshot")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("voucher_code_snapshot");
+
+                    b.Property<string>("VoucherDiscountTypeSnapshot")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("voucher_discount_type_snapshot");
+
+                    b.Property<decimal?>("VoucherDiscountValueSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("voucher_discount_value_snapshot");
+
+                    b.Property<decimal?>("VoucherMaxDiscountAmountSnapshot")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("voucher_max_discount_amount_snapshot");
+
                     b.HasKey("Id")
                         .HasName("bookings_pkey");
 
@@ -288,6 +324,8 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.HasIndex(new[] { "Status" }, "idx_bookings_status");
 
                     b.HasIndex(new[] { "TrainingPackageId" }, "idx_bookings_training_package");
+
+                    b.HasIndex(new[] { "VoucherCampaignId" }, "idx_bookings_voucher_campaign");
 
                     b.ToTable("bookings", null, t =>
                         {
@@ -303,11 +341,48 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<DateTime?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("accepted_at");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("LastMessageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_message_at");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("rejected_at");
+
+                    b.Property<DateTime?>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<Guid?>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("SourceType")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("source_type");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'active'::character varying");
 
                     b.Property<Guid>("User1Id")
                         .HasColumnType("uuid")
@@ -319,6 +394,8 @@ namespace SporticoApp.Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("chat_rooms_pkey");
+
+                    b.HasIndex(new[] { "Status" }, "idx_chat_rooms_status");
 
                     b.HasIndex(new[] { "User1Id" }, "idx_chat_rooms_user1");
 
@@ -991,6 +1068,460 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToTable("coach_wallet_transactions", null, t =>
                         {
                             t.HasComment("Coach wallet transactions");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_id");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<DateTime?>("HiddenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hidden_at");
+
+                    b.Property<Guid?>("HiddenByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("hidden_by_user_id");
+
+                    b.Property<string>("ModerationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("moderation_reason");
+
+                    b.Property<Guid?>("ParentCommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_comment_id");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("post_id");
+
+                    b.Property<int>("ReactionCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("reaction_count");
+
+                    b.Property<int>("ReplyCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("reply_count");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'active'::character varying");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("community_comments_pkey");
+
+                    b.HasIndex(new[] { "AuthorId" }, "idx_community_comments_author");
+
+                    b.HasIndex(new[] { "ParentCommentId" }, "idx_community_comments_parent");
+
+                    b.HasIndex(new[] { "PostId", "Status" }, "idx_community_comments_post_status");
+
+                    b.ToTable("community_comments", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_community_comments_reply_count_non_negative", "reply_count >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPost", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int>("AcceptedParticipants")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("accepted_participants");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("address");
+
+                    b.Property<bool>("AllowComments")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("allow_comments");
+
+                    b.Property<int>("ApplicationCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("application_count");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_id");
+
+                    b.Property<int>("CommentCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("comment_count");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<DateTime?>("EndAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_at");
+
+                    b.Property<decimal?>("FeePerPerson")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("fee_per_person");
+
+                    b.Property<DateTime?>("HiddenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hidden_at");
+
+                    b.Property<Guid?>("HiddenByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("hidden_by_user_id");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<string>("Level")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("level");
+
+                    b.Property<string>("LocationName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("location_name");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
+
+                    b.Property<int?>("MaxParticipants")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_participants");
+
+                    b.Property<string>("ModerationReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("moderation_reason");
+
+                    b.Property<string>("PostType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("post_type");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<int>("ReactionCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("reaction_count");
+
+                    b.Property<int?>("SportId")
+                        .HasColumnType("integer")
+                        .HasColumnName("sport_id");
+
+                    b.Property<DateTime?>("StartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'draft'::character varying");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("version");
+
+                    b.Property<int>("ViewCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("view_count");
+
+                    b.HasKey("Id")
+                        .HasName("community_posts_pkey");
+
+                    b.HasIndex(new[] { "AuthorId" }, "idx_community_posts_author");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "idx_community_posts_created_at")
+                        .IsDescending();
+
+                    b.HasIndex(new[] { "PostType" }, "idx_community_posts_post_type");
+
+                    b.HasIndex(new[] { "SportId" }, "idx_community_posts_sport");
+
+                    b.HasIndex(new[] { "StartAt" }, "idx_community_posts_start_at");
+
+                    b.HasIndex(new[] { "Status" }, "idx_community_posts_status");
+
+                    b.ToTable("community_posts", null, t =>
+                        {
+                            t.HasComment("Community forum / player-recruitment posts (independent of the legacy post module)");
+
+                            t.HasCheckConstraint("chk_community_posts_accepted_non_negative", "accepted_participants >= 0");
+
+                            t.HasCheckConstraint("chk_community_posts_application_count_non_negative", "application_count >= 0");
+
+                            t.HasCheckConstraint("chk_community_posts_comment_count_non_negative", "comment_count >= 0");
+
+                            t.HasCheckConstraint("chk_community_posts_reaction_count_non_negative", "reaction_count >= 0");
+
+                            t.HasCheckConstraint("chk_community_posts_view_count_non_negative", "view_count >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPostApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<Guid>("ApplicantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("applicant_id");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("post_id");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("responded_at");
+
+                    b.Property<Guid?>("RespondedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("responded_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'pending'::character varying");
+
+                    b.HasKey("Id")
+                        .HasName("community_post_applications_pkey");
+
+                    b.HasIndex(new[] { "ApplicantId" }, "idx_community_post_applications_applicant");
+
+                    b.HasIndex(new[] { "PostId", "Status" }, "idx_community_post_applications_post_status");
+
+                    b.HasIndex(new[] { "PostId", "ApplicantId" }, "uq_community_post_applications_post_applicant")
+                        .IsUnique();
+
+                    b.ToTable("community_post_applications", null, t =>
+                        {
+                            t.HasComment("A user's request to join a recruitment-type community post");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPostMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_seconds");
+
+                    b.Property<long?>("FileSize")
+                        .HasColumnType("bigint")
+                        .HasColumnName("file_size");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("media_type");
+
+                    b.Property<string>("MimeType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("mime_type");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_index");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("post_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'active'::character varying");
+
+                    b.Property<string>("StorageKey")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<string>("ThumbnailUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("thumbnail_url");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("url");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id")
+                        .HasName("community_post_media_pkey");
+
+                    b.HasIndex(new[] { "PostId", "OrderIndex" }, "idx_community_post_media_post");
+
+                    b.ToTable("community_post_media", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_community_post_media_order_index_non_negative", "order_index >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPostReaction", b =>
+                {
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("post_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("PostId", "UserId")
+                        .HasName("community_post_reactions_pkey");
+
+                    b.HasIndex(new[] { "UserId" }, "idx_community_post_reactions_user");
+
+                    b.ToTable("community_post_reactions", null, t =>
+                        {
+                            t.HasComment("Like on a community post; MVP supports only 'like'");
                         });
                 });
 
@@ -2810,6 +3341,38 @@ namespace SporticoApp.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.UserBlock", b =>
+                {
+                    b.Property<Guid>("BlockerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("blocker_id");
+
+                    b.Property<Guid>("BlockedUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("blocked_user_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("BlockerId", "BlockedUserId")
+                        .HasName("user_blocks_pkey");
+
+                    b.HasIndex(new[] { "BlockedUserId" }, "idx_user_blocks_blocked_user");
+
+                    b.ToTable("user_blocks", null, t =>
+                        {
+                            t.HasComment("One user blocking another (one-directional)");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.UserRole", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -3085,6 +3648,260 @@ namespace SporticoApp.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.VoucherCampaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<decimal?>("BudgetAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("budget_amount");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("citext")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DiscountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("discount_type");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_value");
+
+                    b.Property<DateTime?>("EndAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_at");
+
+                    b.Property<decimal?>("MaxDiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("max_discount_amount");
+
+                    b.Property<int?>("MaxUsesPerLearner")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_uses_per_learner");
+
+                    b.Property<int?>("MaxUsesTotal")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_uses_total");
+
+                    b.Property<decimal?>("MinOrderAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("min_order_amount");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("ReservedCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("reserved_count");
+
+                    b.Property<decimal>("ReservedDiscountAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("reserved_discount_amount");
+
+                    b.Property<DateTime?>("StartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'draft'::character varying");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<int>("UsedCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("used_count");
+
+                    b.Property<decimal>("UsedDiscountAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("used_discount_amount");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("voucher_campaigns_pkey");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex(new[] { "EndAt" }, "idx_voucher_campaigns_end_at");
+
+                    b.HasIndex(new[] { "StartAt" }, "idx_voucher_campaigns_start_at");
+
+                    b.HasIndex(new[] { "Status" }, "idx_voucher_campaigns_status");
+
+                    b.HasIndex(new[] { "Code" }, "uq_voucher_campaigns_code")
+                        .IsUnique();
+
+                    b.ToTable("voucher_campaigns", null, t =>
+                        {
+                            t.HasComment("Admin-managed, platform-funded discount campaigns for TrainingPackage purchases");
+
+                            t.HasCheckConstraint("chk_voucher_campaigns_reserved_count_non_negative", "reserved_count >= 0");
+
+                            t.HasCheckConstraint("chk_voucher_campaigns_reserved_discount_non_negative", "reserved_discount_amount >= 0");
+
+                            t.HasCheckConstraint("chk_voucher_campaigns_used_count_non_negative", "used_count >= 0");
+
+                            t.HasCheckConstraint("chk_voucher_campaigns_used_discount_non_negative", "used_discount_amount >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.VoucherRedemption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("LearnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("learner_id");
+
+                    b.Property<decimal>("OriginalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("original_amount");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_id");
+
+                    b.Property<string>("ReleaseReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("release_reason");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("released_at");
+
+                    b.Property<DateTime>("ReservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reserved_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("VoucherCampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("voucher_campaign_id");
+
+                    b.HasKey("Id")
+                        .HasName("voucher_redemptions_pkey");
+
+                    b.HasIndex(new[] { "VoucherCampaignId", "Status" }, "idx_voucher_redemptions_campaign_status");
+
+                    b.HasIndex(new[] { "LearnerId", "VoucherCampaignId", "Status" }, "idx_voucher_redemptions_learner_campaign_status");
+
+                    b.HasIndex(new[] { "Status", "ExpiresAt" }, "idx_voucher_redemptions_status_expires_at");
+
+                    b.HasIndex(new[] { "BookingId" }, "uq_voucher_redemptions_booking")
+                        .IsUnique();
+
+                    b.ToTable("voucher_redemptions", null, t =>
+                        {
+                            t.HasComment("One learner's use of one voucher campaign against exactly one booking");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.WithdrawalRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3263,11 +4080,19 @@ namespace SporticoApp.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_bookings_training_package");
 
+                    b.HasOne("SporticoApp.Core.Entities.VoucherCampaign", "VoucherCampaign")
+                        .WithMany("Bookings")
+                        .HasForeignKey("VoucherCampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_bookings_voucher_campaign");
+
                     b.Navigation("Coach");
 
                     b.Navigation("Learner");
 
                     b.Navigation("TrainingPackage");
+
+                    b.Navigation("VoucherCampaign");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.ChatRoom", b =>
@@ -3415,6 +4240,109 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasConstraintName("fk_coach_wallet_transactions_wallet");
 
                     b.Navigation("Wallet");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityComment", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.User", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_comments_author");
+
+                    b.HasOne("SporticoApp.Core.Entities.CommunityComment", "ParentComment")
+                        .WithMany("Replies")
+                        .HasForeignKey("ParentCommentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_community_comments_parent");
+
+                    b.HasOne("SporticoApp.Core.Entities.CommunityPost", "Post")
+                        .WithMany("Comments")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_comments_post");
+
+                    b.Navigation("Author");
+
+                    b.Navigation("ParentComment");
+
+                    b.Navigation("Post");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPost", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.User", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_posts_author");
+
+                    b.HasOne("SporticoApp.Core.Entities.Sport", "Sport")
+                        .WithMany()
+                        .HasForeignKey("SportId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_community_posts_sport");
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Sport");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPostApplication", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.User", "Applicant")
+                        .WithMany()
+                        .HasForeignKey("ApplicantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_post_applications_applicant");
+
+                    b.HasOne("SporticoApp.Core.Entities.CommunityPost", "Post")
+                        .WithMany("Applications")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_post_applications_post");
+
+                    b.Navigation("Applicant");
+
+                    b.Navigation("Post");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPostMedia", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CommunityPost", "Post")
+                        .WithMany("Media")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_post_media_post");
+
+                    b.Navigation("Post");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPostReaction", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.CommunityPost", "Post")
+                        .WithMany("Reactions")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_post_reactions_post");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_post_reactions_user");
+
+                    b.Navigation("Post");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.Follow", b =>
@@ -3845,6 +4773,27 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("TrainingPackageSessionSlot");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.UserBlock", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.User", "BlockedUser")
+                        .WithMany()
+                        .HasForeignKey("BlockedUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_blocks_blocked_user");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "Blocker")
+                        .WithMany()
+                        .HasForeignKey("BlockerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_blocks_blocker");
+
+                    b.Navigation("BlockedUser");
+
+                    b.Navigation("Blocker");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.UserRole", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.Role", "Role")
@@ -3875,6 +4824,48 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasConstraintName("fk_visitor_sessions_user");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.VoucherCampaign", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_voucher_campaigns_created_by");
+
+                    b.Navigation("CreatedByUser");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.VoucherRedemption", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.Booking", "Booking")
+                        .WithOne("VoucherRedemption")
+                        .HasForeignKey("SporticoApp.Core.Entities.VoucherRedemption", "BookingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_voucher_redemptions_booking");
+
+                    b.HasOne("SporticoApp.Core.Entities.User", "Learner")
+                        .WithMany()
+                        .HasForeignKey("LearnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_voucher_redemptions_learner");
+
+                    b.HasOne("SporticoApp.Core.Entities.VoucherCampaign", "VoucherCampaign")
+                        .WithMany("Redemptions")
+                        .HasForeignKey("VoucherCampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_voucher_redemptions_campaign");
+
+                    b.Navigation("Booking");
+
+                    b.Navigation("Learner");
+
+                    b.Navigation("VoucherCampaign");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.WithdrawalRequest", b =>
@@ -3918,6 +4909,8 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("TrainingPlan");
 
                     b.Navigation("TrainingSessions");
+
+                    b.Navigation("VoucherRedemption");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.ChatRoom", b =>
@@ -3961,6 +4954,22 @@ namespace SporticoApp.Infrastructure.Migrations
             modelBuilder.Entity("SporticoApp.Core.Entities.CoachWallet", b =>
                 {
                     b.Navigation("Transactions");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityComment", b =>
+                {
+                    b.Navigation("Replies");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.CommunityPost", b =>
+                {
+                    b.Navigation("Applications");
+
+                    b.Navigation("Comments");
+
+                    b.Navigation("Media");
+
+                    b.Navigation("Reactions");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.Message", b =>
@@ -4063,6 +5072,13 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("ApiRequestMetrics");
 
                     b.Navigation("PageViews");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.VoucherCampaign", b =>
+                {
+                    b.Navigation("Bookings");
+
+                    b.Navigation("Redemptions");
                 });
 #pragma warning restore 612, 618
         }

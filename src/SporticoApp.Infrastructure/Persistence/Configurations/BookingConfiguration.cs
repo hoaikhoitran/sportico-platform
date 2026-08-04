@@ -22,6 +22,12 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
         builder.Property(e => e.TotalAmount).HasPrecision(12, 2);
+        builder.Property(e => e.OriginalAmount).HasPrecision(12, 2);
+        builder.Property(e => e.DiscountAmount).HasPrecision(12, 2).HasDefaultValue(0m);
+        builder.Property(e => e.VoucherCodeSnapshot).HasMaxLength(64);
+        builder.Property(e => e.VoucherDiscountTypeSnapshot).HasMaxLength(20);
+        builder.Property(e => e.VoucherDiscountValueSnapshot).HasPrecision(12, 2);
+        builder.Property(e => e.VoucherMaxDiscountAmountSnapshot).HasPrecision(12, 2);
         builder.Property(e => e.PlatformFeeRate).HasPrecision(5, 4);
         builder.Property(e => e.PlatformFeeAmount).HasPrecision(12, 2);
         builder.Property(e => e.CoachReceiveAmount).HasPrecision(12, 2);
@@ -57,5 +63,14 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
             .HasForeignKey(d => d.TrainingPackageId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_bookings_training_package");
+
+        builder.HasIndex(e => e.VoucherCampaignId, "idx_bookings_voucher_campaign");
+
+        builder.HasOne(d => d.VoucherCampaign)
+            .WithMany(p => p.Bookings)
+            .HasForeignKey(d => d.VoucherCampaignId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_bookings_voucher_campaign");
     }
 }

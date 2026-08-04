@@ -42,7 +42,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             return await _context.ChatRooms
                 .AsNoTracking()
                 .Where(x => x.User1Id == userId || x.User2Id == userId)
-                .OrderByDescending(x => x.CreatedAt)
+                .OrderByDescending(x => x.LastMessageAt ?? x.CreatedAt)
                 .ToListAsync();
         }
 
@@ -52,6 +52,7 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         {
             IQueryable<Message> query = _context.Messages
                 .AsNoTracking()
+                .Include(x => x.MessageAttachments)
                 .Where(x => x.RoomId == roomId);
 
             var totalCount = await query.CountAsync();
@@ -99,6 +100,12 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
         public Task AddMessageWithoutSaveAsync(Message message)
         {
             _context.Messages.Add(message);
+            return Task.CompletedTask;
+        }
+
+        public Task AddAttachmentsWithoutSaveAsync(IEnumerable<MessageAttachment> attachments)
+        {
+            _context.MessageAttachments.AddRange(attachments);
             return Task.CompletedTask;
         }
 

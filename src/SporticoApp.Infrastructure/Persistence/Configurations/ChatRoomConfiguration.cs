@@ -19,6 +19,16 @@ public sealed class ChatRoomConfiguration : IEntityTypeConfiguration<ChatRoom>
         builder.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
         builder.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
 
+        // New rooms are "pending" until the target accepts; existing rows are backfilled to
+        // "active" by the migration so coach<->learner chat keeps working unchanged.
+        builder.Property(e => e.Status)
+            .HasMaxLength(10)
+            .HasDefaultValueSql("'active'::character varying")
+            .IsRequired();
+        builder.Property(e => e.SourceType).HasMaxLength(30);
+
+        builder.HasIndex(e => e.Status, "idx_chat_rooms_status");
+
         builder.HasOne(d => d.User1)
             .WithMany(p => p.ChatRoomsAsUser1)
             .HasForeignKey(d => d.User1Id)

@@ -10,9 +10,13 @@ Purpose: purchase a training package (manual or PayOS) and view bookings.
 > system auto-creates one `scheduled` `TrainingSession` per slot. The learner does **not** call
 > `POST /api/bookings/{bookingId}/sessions` for packages with a fixed schedule.
 
+> **Vouchers**: both purchase endpoints accept an optional `voucherCode` — see
+> [`docs/api/vouchers.md`](vouchers.md) for the full discount/eligibility rules, the 100%-off
+> no-PayOS path, and the extra `originalAmount`/`discountAmount`/`voucherCode` response fields.
+
 ## POST /api/bookings/purchase/manual
 - **Role**: `learner`.
-- **Body**: `{ "trainingPackageId": "guid" }`.
+- **Body**: `{ "trainingPackageId": "guid", "voucherCode": "WELCOME10" }` (`voucherCode` optional).
 - **Response** (`Result<BookingResponse>`): a booking with `status: "active"`, `paidAt` set.
 - **Effects**: validates capacity and reserves one seat on every package session slot; snapshots
   commission; creates a `manual`/`paid` `Payment`; **auto-creates one `scheduled` `TrainingSession`
@@ -24,19 +28,25 @@ Purpose: purchase a training package (manual or PayOS) and view bookings.
 
 ## POST /api/bookings/purchase/payos
 - **Role**: `learner`.
-- **Body**: `{ "trainingPackageId": "guid" }`.
+- **Body**: `{ "trainingPackageId": "guid", "voucherCode": "WELCOME10" }` (`voucherCode` optional).
 - **Response** (`Result<PurchaseTrainingPackagePayOsResponse>`):
 ```json
 {
   "bookingId": "guid", "paymentId": "guid", "orderCode": 1716800000000,
-  "checkoutUrl": "https://pay.payos.vn/...", "status": "pending", "expiredAt": "date"
+  "checkoutUrl": "https://pay.payos.vn/...", "status": "pending", "paymentStatus": "pending",
+  "paymentRequired": true, "bookingStatus": "pending_payment", "expiredAt": "date"
 }
 ```
-- **Effects**: reserves a seat on every package session slot up-front (prevents overselling while
-  pending), creates booking `pending_payment` and a `payos`/`pending` payment, then calls PayOS to
-  create the link. On `paid` the booking is activated and the sessions are auto-created (idempotent);
-  on `cancelled`/`failed`/`expired` the reserved seats are released.
-- **Errors**: as manual, plus `PAYOS_CREATE_PAYMENT_FAILED` if PayOS config/call fails.
+  A voucher covering 100% of the price returns `orderCode: null`, `checkoutUrl: null`,
+  `paymentRequired: false`, `bookingStatus: "active"` — no PayOS redirect needed.
+- **Effects**: reserves a seat on every package session slot AND (if `voucherCode` given) a voucher
+  use, up-front — commits booking+payment+reservations to the database **first**, then calls PayOS.
+  On `paid` the booking is activated, sessions auto-created, and the voucher redemption becomes
+  permanent (idempotent across webhook + reconcile). On `cancelled`/`failed`/`expired` the reserved
+  seats AND the voucher use are released. If PayOS itself fails after the DB commit, the booking is
+  immediately cancelled and everything released — never left dangling.
+- **Errors**: as manual, plus `PAYOS_CREATE_PAYMENT_FAILED` if PayOS config/call fails, plus the
+  voucher error codes in [`vouchers.md`](vouchers.md) if `voucherCode` is invalid/ineligible.
 
 ## GET /api/bookings/me
 - **Role**: `learner`. Paged list of the learner's bookings.
@@ -57,7 +67,9 @@ Purpose: purchase a training package (manual or PayOS) and view bookings.
 {
   "id": "guid", "learnerId": "guid", "coachId": "guid",
   "trainingPackageId": "guid", "trainingPackageTitle": "...",
-  "totalAmount": 1000000, "platformFeeRate": 0.15, "platformFeeAmount": 150000,
+  "totalAmount": 900000, "originalAmount": 1000000, "discountAmount": 100000,
+  "voucherCampaignId": "guid|null", "voucherCode": "WELCOME10|null",
+  "platformFeeRate": 0.15, "platformFeeAmount": 150000,
   "coachReceiveAmount": 850000, "perSessionCoachAmount": 106250,
   "totalSessions": 8, "completedSessions": 0,
   "status": "active",

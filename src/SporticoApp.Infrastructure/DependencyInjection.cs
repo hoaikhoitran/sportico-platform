@@ -75,6 +75,14 @@ namespace SporticoApp.Infrastructure
             services.AddSingleton<IVisitorTrackingQueue, VisitorTrackingQueue>();
             services.AddScoped<IVisitorAnalyticsRepository, VisitorAnalyticsRepository>();
             services.AddSingleton<IUserAgentParser, UserAgentParser>();
+            services.AddScoped<IVoucherCampaignRepository, VoucherCampaignRepository>();
+            services.AddScoped<IVoucherRedemptionRepository, VoucherRedemptionRepository>();
+            services.AddScoped<IUserBlockRepository, UserBlockRepository>();
+            services.AddScoped<ICommunityPostRepository, CommunityPostRepository>();
+            services.AddScoped<ICommunityCommentRepository, CommunityCommentRepository>();
+            services.AddScoped<ICommunityPostReactionRepository, CommunityPostReactionRepository>();
+            services.AddScoped<ICommunityPostApplicationRepository, CommunityPostApplicationRepository>();
+            services.AddScoped<ICommunityReportRepository, CommunityReportRepository>();
 
             services.AddScoped<IJwtService, JwtService>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();

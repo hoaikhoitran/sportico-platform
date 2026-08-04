@@ -3,11 +3,66 @@ using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.DTOs.Notifications;
 using SporticoApp.Application.DTOs.Payments;
 using SporticoApp.Application.DTOs.TrainingPackages;
+using SporticoApp.Application.DTOs.Vouchers;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Interfaces.Services;
 using SporticoApp.Core.Entities;
+using SporticoApp.Shared.Responses;
 
 namespace SporticoApp.Application.Tests.Payments;
+
+/// <summary>
+/// No-op voucher service for booking-purchase-flow tests that don't exercise vouchers: returns null
+/// (no voucher) unless <see cref="ReservationToReturn"/> is set, and just counts Apply/Release calls
+/// so tests can assert the booking flow called them at the right point without needing a real
+/// VoucherService + EF-backed repositories. Voucher BUSINESS LOGIC itself is covered by
+/// SporticoApp.Application.Tests.Vouchers.VoucherServiceTests against the real VoucherService.
+/// </summary>
+internal sealed class FakeVoucherService : IVoucherService
+{
+    public VoucherReservation? ReservationToReturn;
+    public Exception? ThrowOnReserve;
+    public int ApplyCallCount;
+    public int ReleaseCallCount;
+    public Guid? LastAppliedBookingId;
+    public Guid? LastReleasedBookingId;
+    public string? LastReleaseReason;
+
+    public Task<Result<VoucherQuoteResponse>> ValidateAsync(Guid learnerId, ValidateVoucherRequest request)
+        => throw new NotImplementedException();
+
+    public Task<VoucherReservation?> ReserveForBookingAsync(
+        Guid learnerId, string? voucherCode, Guid trainingPackageId, decimal originalAmount, Guid bookingId)
+    {
+        if (ThrowOnReserve != null) throw ThrowOnReserve;
+        if (string.IsNullOrWhiteSpace(voucherCode)) return Task.FromResult<VoucherReservation?>(null);
+        return Task.FromResult(ReservationToReturn);
+    }
+
+    public Task ApplyForBookingAsync(Guid bookingId, Guid? paymentId)
+    {
+        ApplyCallCount++;
+        LastAppliedBookingId = bookingId;
+        return Task.CompletedTask;
+    }
+
+    public Task ReleaseForBookingAsync(Guid bookingId, string releaseReason)
+    {
+        ReleaseCallCount++;
+        LastReleasedBookingId = bookingId;
+        LastReleaseReason = releaseReason;
+        return Task.CompletedTask;
+    }
+
+    public Task<Result<VoucherCampaignResponse>> CreateCampaignAsync(Guid adminUserId, CreateVoucherCampaignRequest request) => throw new NotImplementedException();
+    public Task<Result<VoucherCampaignResponse>> UpdateCampaignAsync(Guid adminUserId, Guid campaignId, UpdateVoucherCampaignRequest request) => throw new NotImplementedException();
+    public Task<Result<VoucherCampaignResponse>> ActivateCampaignAsync(Guid adminUserId, Guid campaignId) => throw new NotImplementedException();
+    public Task<Result<VoucherCampaignResponse>> PauseCampaignAsync(Guid adminUserId, Guid campaignId) => throw new NotImplementedException();
+    public Task<Result<VoucherCampaignResponse>> EndCampaignAsync(Guid adminUserId, Guid campaignId) => throw new NotImplementedException();
+    public Task<Result<PagedResult<VoucherCampaignResponse>>> GetCampaignsAsync(VoucherCampaignFilterRequest filter) => throw new NotImplementedException();
+    public Task<Result<VoucherCampaignResponse>> GetCampaignByIdAsync(Guid campaignId) => throw new NotImplementedException();
+    public Task<Result<PagedResult<VoucherRedemptionResponse>>> GetRedemptionsAsync(Guid campaignId, VoucherRedemptionFilterRequest filter) => throw new NotImplementedException();
+}
 
 /// <summary>
 /// In-memory platform settings for booking tests. Defaults to the seeded 0% commission; set
@@ -105,6 +160,7 @@ internal sealed class FakeBookingRepository : IBookingRepository
     public Task<(List<Booking> Items, int TotalCount)> GetPagedByCoachAsync(Guid coachId, BookingFilterRequest filter) => throw new NotImplementedException();
     public Task<(List<Booking> Items, int TotalCount)> GetPagedAsync(BookingFilterRequest filter) => throw new NotImplementedException();
     public Task<Booking?> GetActiveOrCompletedBetweenUsersAsync(Guid learnerId, Guid coachId) => throw new NotImplementedException();
+    public Task<List<Guid>> GetExpiredPendingPaymentBookingIdsAsync(DateTime nowUtc, int batchSize) => Task.FromResult(new List<Guid>());
 }
 
 internal sealed class FakePaymentRepository : IPaymentRepository

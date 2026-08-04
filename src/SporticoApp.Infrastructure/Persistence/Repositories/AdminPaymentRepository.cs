@@ -37,6 +37,11 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
             result.TotalRevenue = await paidBookings.SumAsync(b => (decimal?)b.TotalAmount) ?? 0m;
             result.PlatformRevenue = await paidBookings.SumAsync(b => (decimal?)b.PlatformFeeAmount) ?? 0m;
             result.CoachRevenue = await paidBookings.SumAsync(b => (decimal?)b.CoachReceiveAmount) ?? 0m;
+            result.GrossPackageValue = await paidBookings.SumAsync(b => (decimal?)b.OriginalAmount) ?? 0m;
+            result.TotalDiscount = await paidBookings.SumAsync(b => (decimal?)b.DiscountAmount) ?? 0m;
+            result.NetCollected = result.TotalRevenue;
+            result.PlatformGrossFee = result.PlatformRevenue;
+            result.PlatformNetRevenue = result.TotalRevenue - result.CoachRevenue;
 
             var payments = ApplyPaymentRange(_context.Payments.AsNoTracking(), fromDate, toDate);
 

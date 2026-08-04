@@ -14,6 +14,14 @@ namespace SporticoApp.Application.DTOs.Bookings
 
         public decimal TotalAmount { get; set; }
 
+        public decimal OriginalAmount { get; set; }
+
+        public decimal DiscountAmount { get; set; }
+
+        public Guid? VoucherCampaignId { get; set; }
+
+        public string? VoucherCode { get; set; }
+
         public decimal PlatformFeeRate { get; set; }
 
         public decimal PlatformFeeAmount { get; set; }

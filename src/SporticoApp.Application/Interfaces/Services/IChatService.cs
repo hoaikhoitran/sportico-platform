@@ -9,6 +9,10 @@ namespace SporticoApp.Application.Interfaces.Services
 
         Task<Result<List<ChatRoomResponse>>> GetRoomsAsync(Guid userId);
 
+        Task<Result<ChatRoomResponse>> AcceptRoomAsync(Guid userId, Guid roomId);
+
+        Task<Result<ChatRoomResponse>> RejectRoomAsync(Guid userId, Guid roomId);
+
         Task<Result<PagedResult<ChatMessageResponse>>> GetMessagesAsync(
             Guid userId,
             Guid roomId,

@@ -24,6 +24,8 @@ namespace SporticoApp.Application.Interfaces.Repositories
 
         Task AddMessageWithoutSaveAsync(Message message);
 
+        Task AddAttachmentsWithoutSaveAsync(IEnumerable<MessageAttachment> attachments);
+
         Task SaveChangesAsync();
     }
 }

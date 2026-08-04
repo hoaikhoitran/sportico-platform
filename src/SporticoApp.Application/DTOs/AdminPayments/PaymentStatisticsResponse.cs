@@ -7,14 +7,42 @@ namespace SporticoApp.Application.DTOs.AdminPayments
     /// </summary>
     public class PaymentStatisticsResponse
     {
-        /// <summary>Sum of paid bookings' TotalAmount (what learners paid) within the filter range.</summary>
+        /// <summary>
+        /// Sum of paid bookings' TotalAmount (what learners actually paid, AFTER any voucher
+        /// discount) within the filter range. Same value as <see cref="NetCollected"/> — kept for
+        /// backward compatibility with existing dashboard clients.
+        /// </summary>
         public decimal TotalRevenue { get; set; }
 
-        /// <summary>Sum of paid bookings' PlatformFeeAmount within the filter range.</summary>
+        /// <summary>
+        /// Sum of paid bookings' PlatformFeeAmount (commission on the ORIGINAL package price, before
+        /// voucher) within the filter range. This is the platform's GROSS fee, NOT its net profit —
+        /// a voucher discount is platform-funded and comes out of this on top, see
+        /// <see cref="PlatformNetRevenue"/>. Same value as <see cref="PlatformGrossFee"/>.
+        /// </summary>
         public decimal PlatformRevenue { get; set; }
 
-        /// <summary>Sum of paid bookings' CoachReceiveAmount within the filter range.</summary>
+        /// <summary>Sum of paid bookings' CoachReceiveAmount within the filter range. Never reduced by a voucher.</summary>
         public decimal CoachRevenue { get; set; }
+
+        /// <summary>Sum of paid bookings' OriginalAmount (package price before any voucher) within the filter range.</summary>
+        public decimal GrossPackageValue { get; set; }
+
+        /// <summary>Sum of paid bookings' DiscountAmount (voucher discount, platform-funded) within the filter range.</summary>
+        public decimal TotalDiscount { get; set; }
+
+        /// <summary>Alias of <see cref="TotalRevenue"/>: GrossPackageValue - TotalDiscount.</summary>
+        public decimal NetCollected { get; set; }
+
+        /// <summary>Alias of <see cref="PlatformRevenue"/>: SUM(PlatformFeeAmount), computed off the original price.</summary>
+        public decimal PlatformGrossFee { get; set; }
+
+        /// <summary>
+        /// The platform's actual profit after funding voucher discounts: NetCollected - CoachRevenue
+        /// (equivalently PlatformGrossFee - TotalDiscount). THIS is the true bottom line, not
+        /// <see cref="PlatformRevenue"/>/<see cref="PlatformGrossFee"/> alone.
+        /// </summary>
+        public decimal PlatformNetRevenue { get; set; }
 
         /// <summary>Total Payment rows within the filter range (all statuses).</summary>
         public int TotalTransactions { get; set; }

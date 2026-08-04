@@ -37,6 +37,24 @@ namespace SporticoApp.Api.Controllers
             return Ok(result);
         }
 
+        [HttpPut("rooms/{roomId:guid}/accept")]
+        [ProducesResponseType(typeof(Result<ChatRoomResponse>), 200)]
+        public async Task<IActionResult> AcceptRoom(Guid roomId)
+        {
+            var userId = User.GetUserId();
+            var result = await _chatService.AcceptRoomAsync(userId, roomId);
+            return Ok(result);
+        }
+
+        [HttpPut("rooms/{roomId:guid}/reject")]
+        [ProducesResponseType(typeof(Result<ChatRoomResponse>), 200)]
+        public async Task<IActionResult> RejectRoom(Guid roomId)
+        {
+            var userId = User.GetUserId();
+            var result = await _chatService.RejectRoomAsync(userId, roomId);
+            return Ok(result);
+        }
+
         [HttpGet("rooms/{roomId:guid}/messages")]
         [ProducesResponseType(typeof(Result<PagedResult<ChatMessageResponse>>), 200)]
         public async Task<IActionResult> GetMessages(

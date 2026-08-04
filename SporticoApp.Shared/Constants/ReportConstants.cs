@@ -5,8 +5,14 @@ namespace SporticoApp.Shared.Constants
     {
         public const string User = "user";
         public const string Review = "review";
+        public const string CommunityPost = "community_post";
+        public const string CommunityComment = "community_comment";
+        public const string ChatMessage = "chat_message";
 
-        public static readonly string[] All = { User, Review };
+        public static readonly string[] All =
+        {
+            User, Review, CommunityPost, CommunityComment, ChatMessage
+        };
     }
 
     public static class ReportStatuses
@@ -25,5 +31,9 @@ namespace SporticoApp.Shared.Constants
         public const string None = "none";
         public const string ReviewHidden = "review_hidden";
         public const string ReviewDeleted = "review_deleted";
+        public const string PostHidden = "post_hidden";
+        public const string PostDeleted = "post_deleted";
+        public const string CommentHidden = "comment_hidden";
+        public const string CommentDeleted = "comment_deleted";
     }
 }

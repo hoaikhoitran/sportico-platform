@@ -41,5 +41,14 @@ namespace SporticoApp.Application.Interfaces.Services
         Task<Result<BookingResponse>> GetCoachBookingByIdAsync(
             Guid coachId,
             Guid bookingId);
+
+        /// <summary>
+        /// Background-sweep safety net: cancels PendingPayment bookings whose PayOS payment link has
+        /// expired and was never resolved by the webhook or a learner-triggered reconcile — releasing
+        /// their reserved session slots and voucher reservation. Idempotent per booking (guarded by
+        /// the same PendingPayment status check as the webhook/reconcile paths). Returns the number
+        /// of bookings released in this batch.
+        /// </summary>
+        Task<int> ReleaseExpiredPendingPaymentsAsync(int batchSize);
     }
 }

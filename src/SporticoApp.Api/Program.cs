@@ -109,6 +109,14 @@ namespace SporticoApp.Api
             // so tracking writes happen off the HTTP request thread — see VisitorTrackingMiddleware.
             builder.Services.AddHostedService<SporticoApp.Api.BackgroundServices.VisitorTrackingBackgroundService>();
 
+            // Community post lifecycle: flips published/closed posts to "expired" once their
+            // activity time has passed.
+            builder.Services.AddHostedService<SporticoApp.Api.BackgroundServices.CommunityPostExpiryBackgroundService>();
+
+            // Safety net for PayOS payments/voucher reservations abandoned before the webhook or a
+            // learner-triggered reconcile ever resolved them.
+            builder.Services.AddHostedService<SporticoApp.Api.BackgroundServices.PaymentAndVoucherExpirySweepBackgroundService>();
+
             var jwtSecretKey = builder.Configuration["JWT:SecretKey"];
             var jwtIssuer = builder.Configuration["JWT:Issuer"];
             var jwtAudience = builder.Configuration["JWT:Audience"];

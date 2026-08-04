@@ -213,6 +213,7 @@ public class TrainingPlanCreateTests
         public Task<(List<Booking> Items, int TotalCount)> GetPagedByCoachAsync(Guid coachId, SporticoApp.Application.DTOs.Bookings.BookingFilterRequest filter) => throw new NotImplementedException();
         public Task<(List<Booking> Items, int TotalCount)> GetPagedAsync(SporticoApp.Application.DTOs.Bookings.BookingFilterRequest filter) => throw new NotImplementedException();
         public Task<Booking?> GetActiveOrCompletedBetweenUsersAsync(Guid learnerId, Guid coachId) => throw new NotImplementedException();
+        public Task<List<Guid>> GetExpiredPendingPaymentBookingIdsAsync(DateTime nowUtc, int batchSize) => Task.FromResult(new List<Guid>());
         public Task AddAsync(Booking booking) => throw new NotImplementedException();
         public Task AddWithoutSaveAsync(Booking booking) => throw new NotImplementedException();
         public Task SaveChangesAsync() => Task.CompletedTask;

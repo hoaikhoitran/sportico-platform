@@ -1,9 +1,11 @@
 using FluentValidation;
+using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.DTOs.Chat;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Services;
 using SporticoApp.Application.Validators.Chat;
 using SporticoApp.Core.Entities;
+using SporticoApp.Shared.Constants;
 using SporticoApp.Shared.Enums;
 using SporticoApp.Shared.Exceptions;
 using Xunit;
@@ -26,7 +28,9 @@ public class ChatServiceMessagesTests
     private static ChatService CreateService(ChatRoom? room, List<Message>? messages = null)
         => new(
             new FakeChatRepository(room, messages ?? new List<Message>()),
-            new FakeCoachRepository(),
+            new FakeUserRepository(),
+            new FakeBookingRepository(),
+            new FakeUserBlockRepository(),
             new FakeNotificationRepository(),
             new CreateChatRoomRequestValidator(),
             new ChatMessageFilterRequestValidator(),
@@ -109,7 +113,7 @@ public class ChatServiceMessagesTests
         Assert.Equal(ErrorType.Validation, ex.Type);
     }
 
-    private sealed class FakeChatRepository : IChatRepository
+    internal sealed class FakeChatRepository : IChatRepository
     {
         private readonly ChatRoom? _room;
         private readonly List<Message> _messages;
@@ -134,27 +138,76 @@ public class ChatServiceMessagesTests
             return Task.FromResult((page, ordered.Count));
         }
 
-        public Task<ChatRoom?> GetRoomByIdForUpdateAsync(Guid roomId) => throw new NotImplementedException();
+        public Task<ChatRoom?> GetRoomByIdForUpdateAsync(Guid roomId)
+            => Task.FromResult(_room is not null && _room.Id == roomId ? _room : null);
         public Task<ChatRoom?> GetRoomByUsersAsync(Guid userId1, Guid userId2) => throw new NotImplementedException();
         public Task<List<ChatRoom>> GetRoomsForUserAsync(Guid userId) => throw new NotImplementedException();
         public Task<ChatRoom> AddRoomAsync(ChatRoom room) => throw new NotImplementedException();
         public Task AddMessageAsync(Message message) => throw new NotImplementedException();
-        public Task AddMessageWithoutSaveAsync(Message message) => throw new NotImplementedException();
-        public Task SaveChangesAsync() => throw new NotImplementedException();
-    }
-
-    private sealed class FakeCoachRepository : ICoachRepository
-    {
-        public Task<bool> ExistsByUserIdAsync(Guid userId) => Task.FromResult(true);
-        public Task<CoachProfile?> GetByUserIdAsync(Guid userId) => throw new NotImplementedException();
-        public Task<CoachProfile?> GetByUserIdWithDetailsAsync(Guid userId) => throw new NotImplementedException();
-        public Task<CoachProfile?> GetByUserIdForUpdateAsync(Guid userId) => throw new NotImplementedException();
+        public Task AddMessageWithoutSaveAsync(Message message)
+        {
+            _messages.Add(message);
+            return Task.CompletedTask;
+        }
+        public Task AddAttachmentsWithoutSaveAsync(IEnumerable<MessageAttachment> attachments) => Task.CompletedTask;
         public Task SaveChangesAsync() => Task.CompletedTask;
-        public Task CreateCoachProfileAsync(CoachProfile coachProfile, int coachRoleId, List<int> sportIds)
-            => throw new NotImplementedException();
     }
 
-    private sealed class FakeNotificationRepository : INotificationRepository
+    internal sealed class FakeUserRepository : IUserRepository
+    {
+        public User? User;
+
+        public Task<User?> GetByEmailAsync(string email) => throw new NotImplementedException();
+        public Task<User?> GetByEmailWithRolesAsync(string email) => throw new NotImplementedException();
+        public Task AddAsync(User user) => throw new NotImplementedException();
+        public Task AddWithoutSaveAsync(User user) => throw new NotImplementedException();
+        public Task SaveChangesAsync() => Task.CompletedTask;
+        public Task<User?> GetByVerificationTokenAsync(string token) => throw new NotImplementedException();
+        public Task<User?> GetByPasswordResetTokenAsync(string token) => throw new NotImplementedException();
+        public Task UpdateAsync(User user) => throw new NotImplementedException();
+        public Task<User?> GetByIdAsync(Guid id)
+            => Task.FromResult(User != null && User.Id == id
+                ? User
+                : new User { Id = id, Status = UserStatuses.Active, FullName = "Test User", Email = "t@example.com" });
+        public Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id) => throw new NotImplementedException();
+        public Task<User?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
+        public Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedForAdminAsync(SporticoApp.Application.DTOs.Users.AdminUserFilterRequest filter) => throw new NotImplementedException();
+        public Task<User?> GetByIdForAdminUpdateAsync(Guid id) => throw new NotImplementedException();
+        public Task<bool> ExistsByEmailAsync(string email) => throw new NotImplementedException();
+    }
+
+    internal sealed class FakeBookingRepository : IBookingRepository
+    {
+        public Task<Booking?> GetByIdAsync(Guid id) => throw new NotImplementedException();
+        public Task<Booking?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
+        public Task<Booking?> GetByIdWithTrainingPackageAsync(Guid id) => throw new NotImplementedException();
+        public Task<Booking?> GetByIdForLearnerAsync(Guid learnerId, Guid id) => throw new NotImplementedException();
+        public Task<Booking?> GetByIdForCoachAsync(Guid coachId, Guid id) => throw new NotImplementedException();
+        public Task<Booking?> GetByIdForLearnerForUpdateAsync(Guid learnerId, Guid id) => throw new NotImplementedException();
+        public Task<Booking?> GetByIdForCoachForUpdateAsync(Guid coachId, Guid id) => throw new NotImplementedException();
+        public Task<(List<Booking> Items, int TotalCount)> GetPagedByLearnerAsync(Guid learnerId, BookingFilterRequest filter) => throw new NotImplementedException();
+        public Task<(List<Booking> Items, int TotalCount)> GetPagedByCoachAsync(Guid coachId, BookingFilterRequest filter) => throw new NotImplementedException();
+        public Task<(List<Booking> Items, int TotalCount)> GetPagedAsync(BookingFilterRequest filter) => throw new NotImplementedException();
+        public Task<Booking?> GetActiveOrCompletedBetweenUsersAsync(Guid learnerId, Guid coachId) => Task.FromResult<Booking?>(null);
+        public Task<List<Guid>> GetExpiredPendingPaymentBookingIdsAsync(DateTime nowUtc, int batchSize) => Task.FromResult(new List<Guid>());
+        public Task AddAsync(Booking booking) => throw new NotImplementedException();
+        public Task AddWithoutSaveAsync(Booking booking) => throw new NotImplementedException();
+        public Task SaveChangesAsync() => Task.CompletedTask;
+    }
+
+    internal sealed class FakeUserBlockRepository : IUserBlockRepository
+    {
+        public bool Blocked;
+
+        public Task<bool> IsBlockedAsync(Guid blockerId, Guid blockedUserId) => Task.FromResult(Blocked);
+        public Task<bool> IsBlockedEitherDirectionAsync(Guid userId1, Guid userId2) => Task.FromResult(Blocked);
+        public Task<UserBlock?> GetAsync(Guid blockerId, Guid blockedUserId) => Task.FromResult<UserBlock?>(null);
+        public Task<List<UserBlock>> GetBlockedByUserAsync(Guid blockerId) => Task.FromResult(new List<UserBlock>());
+        public Task AddAsync(UserBlock block) => Task.CompletedTask;
+        public Task RemoveAsync(UserBlock block) => Task.CompletedTask;
+    }
+
+    internal sealed class FakeNotificationRepository : INotificationRepository
     {
         public Task<(List<Notification> Items, int TotalCount)> GetPagedByUserIdAsync(
             Guid userId, DTOs.Notifications.NotificationFilterRequest filter) => throw new NotImplementedException();

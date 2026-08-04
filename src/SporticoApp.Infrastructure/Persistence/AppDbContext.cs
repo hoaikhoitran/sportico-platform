@@ -18,6 +18,14 @@ public class AppDbContext : DbContext
     public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
     public DbSet<CoachAvailabilitySlot> CoachAvailabilitySlots => Set<CoachAvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
+    public DbSet<CommunityPost> CommunityPosts => Set<CommunityPost>();
+    public DbSet<CommunityPostMedia> CommunityPostMedia => Set<CommunityPostMedia>();
+    public DbSet<CommunityComment> CommunityComments => Set<CommunityComment>();
+    public DbSet<CommunityPostReaction> CommunityPostReactions => Set<CommunityPostReaction>();
+    public DbSet<CommunityPostApplication> CommunityPostApplications => Set<CommunityPostApplication>();
+    public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
+    public DbSet<VoucherCampaign> VoucherCampaigns => Set<VoucherCampaign>();
+    public DbSet<VoucherRedemption> VoucherRedemptions => Set<VoucherRedemption>();
     public DbSet<CoachPayoutAccount> CoachPayoutAccounts => Set<CoachPayoutAccount>();
     public DbSet<CoachWallet> CoachWallets => Set<CoachWallet>();
     public DbSet<CoachWalletTransaction> CoachWalletTransactions => Set<CoachWalletTransaction>();

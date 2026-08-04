@@ -16,7 +16,25 @@ public partial class Booking
 
     public Guid TrainingPackageId { get; set; }
 
+    /// <summary>Amount the learner actually pays: OriginalAmount - DiscountAmount.</summary>
     public decimal TotalAmount { get; set; }
+
+    /// <summary>TrainingPackage.Price at purchase time, before any voucher discount.</summary>
+    public decimal OriginalAmount { get; set; }
+
+    /// <summary>Voucher discount snapshot. 0 when no voucher was used.</summary>
+    public decimal DiscountAmount { get; set; }
+
+    /// <summary>Set only when a voucher was redeemed for this booking. Never changes after creation.</summary>
+    public Guid? VoucherCampaignId { get; set; }
+
+    public string? VoucherCodeSnapshot { get; set; }
+
+    public string? VoucherDiscountTypeSnapshot { get; set; }
+
+    public decimal? VoucherDiscountValueSnapshot { get; set; }
+
+    public decimal? VoucherMaxDiscountAmountSnapshot { get; set; }
 
     public decimal PlatformFeeRate { get; set; }
 
@@ -60,6 +78,10 @@ public partial class Booking
     public virtual CoachProfile Coach { get; set; } = null!;
 
     public virtual TrainingPackage TrainingPackage { get; set; } = null!;
+
+    public virtual VoucherCampaign? VoucherCampaign { get; set; }
+
+    public virtual VoucherRedemption? VoucherRedemption { get; set; }
 
     public virtual ICollection<TrainingSession> TrainingSessions { get; set; } = new List<TrainingSession>();
 

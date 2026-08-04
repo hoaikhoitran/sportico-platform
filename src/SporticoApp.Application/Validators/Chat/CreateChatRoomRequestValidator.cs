@@ -8,9 +8,13 @@ namespace SporticoApp.Application.Validators.Chat
     {
         public CreateChatRoomRequestValidator()
         {
-            RuleFor(x => x.CoachId)
-                .NotEmpty()
-                .WithMessage("CoachId is required");
+            RuleFor(x => x)
+                .Must(x => x.TargetUserId.HasValue || x.CoachId.HasValue)
+                .WithMessage("targetUserId is required");
+
+            RuleFor(x => x.SourceType)
+                .MaximumLength(30)
+                .When(x => x.SourceType != null);
         }
     }
 }

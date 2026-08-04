@@ -247,5 +247,60 @@ namespace SporticoApp.Shared.Constants
             "ADVISORY_CONVERSATION_NOT_OWNED";
         public const string AdvisoryReplyFailed =
             "ADVISORY_REPLY_FAILED";
+
+        // Voucher
+        public const string VoucherNotFound = "VOUCHER_NOT_FOUND";
+        public const string VoucherNotActive = "VOUCHER_NOT_ACTIVE";
+        public const string VoucherNotStarted = "VOUCHER_NOT_STARTED";
+        public const string VoucherExpired = "VOUCHER_EXPIRED";
+        public const string VoucherMinOrderNotMet = "VOUCHER_MIN_ORDER_NOT_MET";
+        public const string VoucherUsageLimitReached = "VOUCHER_USAGE_LIMIT_REACHED";
+        public const string VoucherLearnerLimitReached = "VOUCHER_LEARNER_LIMIT_REACHED";
+        public const string VoucherNotApplicable = "VOUCHER_NOT_APPLICABLE";
+        public const string VoucherBudgetExceeded = "VOUCHER_BUDGET_EXCEEDED";
+        public const string VoucherAlreadyUsedForBooking = "VOUCHER_ALREADY_USED_FOR_BOOKING";
+        public const string VoucherConcurrencyConflict = "VOUCHER_CONCURRENCY_CONFLICT";
+        public const string VoucherCampaignNotFound = "VOUCHER_CAMPAIGN_NOT_FOUND";
+        public const string VoucherCodeAlreadyExists = "VOUCHER_CODE_ALREADY_EXISTS";
+        public const string VoucherCampaignHasRedemptions = "VOUCHER_CAMPAIGN_HAS_REDEMPTIONS";
+        public const string VoucherInvalidDateRange = "VOUCHER_INVALID_DATE_RANGE";
+        public const string VoucherCampaignAlreadyEnded = "VOUCHER_CAMPAIGN_ALREADY_ENDED";
+
+        // Community
+        public const string CommunityPostNotFound = "COMMUNITY_POST_NOT_FOUND";
+        public const string CommunityPostNotOwned = "COMMUNITY_POST_NOT_OWNED";
+        public const string CommunityPostNotPublished = "COMMUNITY_POST_NOT_PUBLISHED";
+        public const string CommunityPostFull = "COMMUNITY_POST_FULL";
+        public const string CommunityPostExpired = "COMMUNITY_POST_EXPIRED";
+        public const string CommunityPostInvalidStatus = "COMMUNITY_POST_INVALID_STATUS";
+        public const string CommunityPostTooManyMedia = "COMMUNITY_POST_TOO_MANY_MEDIA";
+        public const string CommunityCommentNotFound = "COMMUNITY_COMMENT_NOT_FOUND";
+        public const string CommunityCommentNotOwned = "COMMUNITY_COMMENT_NOT_OWNED";
+        public const string CommunityCommentNestingNotAllowed = "COMMUNITY_COMMENT_NESTING_NOT_ALLOWED";
+        public const string CommunityCommentsDisabled = "COMMUNITY_COMMENTS_DISABLED";
+        public const string CommunityApplicationNotFound = "COMMUNITY_APPLICATION_NOT_FOUND";
+        public const string CommunityApplicationAlreadyExists = "COMMUNITY_APPLICATION_ALREADY_EXISTS";
+        public const string CommunityApplicationNotAllowed = "COMMUNITY_APPLICATION_NOT_ALLOWED";
+        public const string CommunityApplicationNotPending = "COMMUNITY_APPLICATION_NOT_PENDING";
+        public const string CommunityConcurrencyConflict = "COMMUNITY_CONCURRENCY_CONFLICT";
+
+        // Report (generic)
+        public const string ReportNotFound = "REPORT_NOT_FOUND";
+        public const string ReportInvalidTarget = "REPORT_INVALID_TARGET";
+
+        // Chat (user-to-user extension)
+        public const string ChatCannotMessageSelf = "CHAT_CANNOT_MESSAGE_SELF";
+        public const string ChatTargetUserNotFound = "CHAT_TARGET_USER_NOT_FOUND";
+        public const string ChatTargetUserInactive = "CHAT_TARGET_USER_INACTIVE";
+        public const string ChatRoomNotPending = "CHAT_ROOM_NOT_PENDING";
+        public const string ChatRoomRejected = "CHAT_ROOM_REJECTED";
+        public const string ChatUserBlocked = "CHAT_USER_BLOCKED";
+        public const string ChatEmptyMessage = "CHAT_EMPTY_MESSAGE";
+        public const string ChatTooManyAttachments = "CHAT_TOO_MANY_ATTACHMENTS";
+
+        // User block
+        public const string UserBlockCannotBlockSelf = "USER_BLOCK_CANNOT_BLOCK_SELF";
+        public const string UserBlockAlreadyBlocked = "USER_BLOCK_ALREADY_BLOCKED";
+        public const string UserBlockNotFound = "USER_BLOCK_NOT_FOUND";
     }
 }

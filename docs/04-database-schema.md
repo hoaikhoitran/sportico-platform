@@ -98,8 +98,30 @@ Current migration history (chronological):
 | `20260526055807_AddPayOsFieldsToPayment` | PayOS fields on `payments` |
 | `20260526092825_UpdatePaymentMethodConstraint` | Payment method/status check constraints |
 | **`20260527034926_AddBookingTrainingFlow`** | **Booking + training/session/wallet/payout/personalization tables** |
+| `20260620163848_InitSupabaseSchema` | Baseline snapshot for the production Supabase database |
+| `20260623174211_AddTrainingPackageScheduledSessions` | Fixed-schedule `training_package_session_slots` |
+| `20260711050207_AddConfigurablePlatformCommission` | `platform_settings` singleton (admin-editable commission, default 0%) |
+| `20260721062200_AddVisitorAndApiRequestAnalytics` | Self-hosted visitor/page-view/API-request analytics tables |
+| **`20260803160234_AddVoucherCommunityAndChatModules`** | **Voucher campaigns/redemptions + booking discount snapshot, community forum module, `chat_rooms` request/accept/reject extension, `user_blocks`** |
 
 The booking-based marketplace schema is introduced by `20260527034926_AddBookingTrainingFlow`.
+
+### New tables (`20260803160234_AddVoucherCommunityAndChatModules`)
+
+| Table | Purpose |
+|---|---|
+| `voucher_campaigns` | Admin-managed, platform-funded discount campaigns. `code` is `citext` (case-insensitive unique). |
+| `voucher_redemptions` | One learner's use of one campaign against exactly one booking (`UNIQUE(booking_id)`). Lifecycle: `reserved → applied \| released`. |
+| `community_posts` | Forum / player-recruitment posts, independent of the legacy `posts` table. |
+| `community_post_media` | Image/video attachments (max 8 per post, max 1 video — enforced in the service layer). |
+| `community_comments` | Comments + one-level replies (`parent_comment_id`, self-referencing FK, `Restrict` delete). |
+| `community_post_reactions` | Likes, `PK(post_id, user_id)`. |
+| `community_post_applications` | "Xin tham gia" requests for recruitment posts, `UNIQUE(post_id, applicant_id)`. |
+| `user_blocks` | One user blocking another, `PK(blocker_id, blocked_user_id)`. |
+
+`bookings` gained `original_amount`, `discount_amount`, `voucher_campaign_id`, `voucher_code_snapshot`, `voucher_discount_type_snapshot`, `voucher_discount_value_snapshot`, `voucher_max_discount_amount_snapshot` — existing rows were safely backfilled (`original_amount = total_amount`, `discount_amount = 0`, no voucher) by the migration itself, verified against production with zero data loss. `chat_rooms` gained `status` (backfilled to `'active'` for all existing rows — no existing conversation was interrupted), `requested_by_user_id`, `requested_at`, `accepted_at`, `rejected_at`, `last_message_at`, `source_type`, `source_id`. `reports.target_type` gained three new allowed values: `community_post`, `community_comment`, `chat_message` (no schema change — `Report` already supported polymorphic targets for reviews).
+
+See [`docs/api/vouchers.md`](api/vouchers.md) and [`docs/api/community.md`](api/community.md) for the full API surface.
 
 ### Apply migrations
 

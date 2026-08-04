@@ -14,6 +14,7 @@ public partial class Message
 
     public Guid SenderId { get; set; }
 
+    /// <summary>May be empty when the message is attachment-only (validated: content OR attachment required).</summary>
     public string Content { get; set; } = null!;
 
     public bool IsRead { get; set; }
