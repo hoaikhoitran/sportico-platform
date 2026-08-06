@@ -87,6 +87,16 @@ namespace SporticoApp.Infrastructure.Persistence.Repositories
                 .FirstOrDefaultAsync(x => x.Id == id);
         }
 
+        // Tracked (no AsNoTracking): the token issuer writes RefreshToken/RefreshTokenExpiresAt
+        // onto the returned entity and expects SaveChanges to pick it up.
+        public async Task<User?> GetByIdWithRolesAsync(Guid id)
+        {
+            return await _context.Users
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(x => x.Id == id);
+        }
+
         public async Task<User?> GetByIdForUpdateAsync(Guid id)
         {
             return await _context.Users

@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<AdvisoryConversation> AdvisoryConversations => Set<AdvisoryConversation>();
     public DbSet<AdvisoryMessage> AdvisoryMessages => Set<AdvisoryMessage>();
     public DbSet<ApiRequestMetric> ApiRequestMetrics => Set<ApiRequestMetric>();
+    public DbSet<AuthExchangeCode> AuthExchangeCodes => Set<AuthExchangeCode>();
     public DbSet<ChatRoom> ChatRooms => Set<ChatRoom>();
     public DbSet<CoachAvailabilitySlot> CoachAvailabilitySlots => Set<CoachAvailabilitySlot>();
     public DbSet<Booking> Bookings => Set<Booking>();
@@ -59,6 +60,7 @@ public class AppDbContext : DbContext
     public DbSet<TrainingPlanWeek> TrainingPlanWeeks => Set<TrainingPlanWeek>();
     public DbSet<TrainingPlan> TrainingPlans => Set<TrainingPlan>();
     public DbSet<TrainingSession> TrainingSessions => Set<TrainingSession>();
+    public DbSet<UserExternalLogin> UserExternalLogins => Set<UserExternalLogin>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<User> Users => Set<User>();
     public DbSet<VCoach> VCoaches => Set<VCoach>();

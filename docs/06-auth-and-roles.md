@@ -100,3 +100,20 @@ Swagger UI is served at the application root (`/`) in all environments. To call 
 2. Click **Authorize** (top right).
 3. Paste **only the token** (no `Bearer ` prefix — the scheme is configured as `bearer`/JWT and the description says "Enter JWT token only").
 4. Execute protected endpoints; Swagger attaches the header automatically.
+
+## Google sign-in
+
+Sportico also accepts Google as an identity provider. Two flows are supported and both end with the
+**same** Sportico access + refresh token pair produced by the same issuer as password login — there
+is no second session mechanism and no change to the JWT claim contract.
+
+- `POST /api/auth/google` — Google Identity Services ID token.
+- `GET /api/auth/google` → Google → callback → one-time exchange code → `POST /api/auth/google/exchange`.
+
+Account rules: the Google `sub` claim (never the email) identifies the external identity; a
+Google-verified email may link to an existing account but never creates a second one; new Google
+accounts are `active` with the `learner` role only; a `banned` account can never sign in or be
+linked. A Google-only account has `password_hash = NULL` — password login returns
+`401 AUTH_INVALID_CREDENTIALS` and change-password returns `409 AUTH_PASSWORD_NOT_SET`.
+
+See [api/auth.md](api/auth.md) and [frontend/GOOGLE_AUTH_FRONTEND_HANDOFF.md](frontend/GOOGLE_AUTH_FRONTEND_HANDOFF.md).

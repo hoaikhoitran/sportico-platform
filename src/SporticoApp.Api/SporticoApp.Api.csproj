@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="DotNetEnv" Version="3.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.0.8" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.8">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -18,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\SporticoApp.Shared\SporticoApp.Shared.csproj" />
+    <ProjectReference Include="..\SporticoApp.Shared\SporticoApp.Shared.csproj" />
     <ProjectReference Include="..\SporticoApp.Application\SporticoApp.Application.csproj" />
     <ProjectReference Include="..\SporticoApp.Infrastructure\SporticoApp.Infrastructure.csproj" />
   </ItemGroup>

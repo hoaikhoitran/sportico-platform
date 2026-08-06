@@ -1,4 +1,4 @@
-using SporticoApp.Application.DTOs.Users;
+﻿using SporticoApp.Application.DTOs.Users;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Services;
 using SporticoApp.Application.Validators.Users;
@@ -172,6 +172,8 @@ public class AdminUserServiceTests
         public Task<User?> GetByIdForAdminUpdateAsync(Guid id)
             => Task.FromResult(ForAdminUpdate != null && ForAdminUpdate.Id == id ? ForAdminUpdate : null);
         public Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id)
+            => Task.FromResult(ForAdminUpdate ?? Added.FirstOrDefault(u => u.Id == id));
+        public Task<User?> GetByIdWithRolesAsync(Guid id)
             => Task.FromResult(ForAdminUpdate ?? Added.FirstOrDefault(u => u.Id == id));
 
         public Task<User?> GetByEmailAsync(string email) => throw new NotImplementedException();

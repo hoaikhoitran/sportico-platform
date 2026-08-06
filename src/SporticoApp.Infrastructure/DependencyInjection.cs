@@ -84,7 +84,12 @@ namespace SporticoApp.Infrastructure
             services.AddScoped<ICommunityPostApplicationRepository, CommunityPostApplicationRepository>();
             services.AddScoped<ICommunityReportRepository, CommunityReportRepository>();
 
+            services.AddScoped<IUserExternalLoginRepository, UserExternalLoginRepository>();
+            services.AddScoped<IAuthExchangeCodeRepository, AuthExchangeCodeRepository>();
+
             services.AddScoped<IJwtService, JwtService>();
+            // Verifies Google ID tokens (signature/issuer/audience/expiry) via Google.Apis.Auth.
+            services.AddScoped<IGoogleIdentityProvider, GoogleIdentityProvider>();
             services.AddScoped<IRefreshTokenService, RefreshTokenService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddSingleton<IEmailTemplateService, EmailTemplateService>();

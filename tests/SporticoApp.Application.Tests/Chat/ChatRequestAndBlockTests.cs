@@ -1,4 +1,4 @@
-using SporticoApp.Application.DTOs.Bookings;
+﻿using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.DTOs.Chat;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Services;
@@ -69,6 +69,7 @@ public class ChatRequestAndBlockTests
         public Task<User?> GetByPasswordResetTokenAsync(string token) => throw new NotImplementedException();
         public Task UpdateAsync(User user) => throw new NotImplementedException();
         public Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id) => throw new NotImplementedException();
+        public Task<User?> GetByIdWithRolesAsync(Guid id) => throw new NotImplementedException();
         public Task<User?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
         public Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedForAdminAsync(SporticoApp.Application.DTOs.Users.AdminUserFilterRequest filter) => throw new NotImplementedException();
         public Task<User?> GetByIdForAdminUpdateAsync(Guid id) => throw new NotImplementedException();

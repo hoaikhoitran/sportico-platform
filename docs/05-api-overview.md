@@ -16,6 +16,16 @@ Account lifecycle: register, verify email, login, refresh token.
 | POST | `/api/auth/login` | Public |
 | POST | `/api/auth/refresh-token` | Public |
 
+Google sign-in — `GoogleAuthController` (`/api/auth/google`):
+
+| Method | Route | Role | Notes |
+|---|---|---|---|
+| POST | `/api/auth/google` | Public | Google Identity Services ID token → Sportico tokens |
+| GET | `/api/auth/google` | Public | `302` browser redirect to Google (navigation, not fetch) |
+| GET | `/api/auth/google/callback` | Public | Google's callback — handled by the auth handler, never called by the frontend |
+| GET | `/api/auth/google/complete` | Public | `302` to `{FRONTEND_URL}/auth/google/callback?code=…` |
+| POST | `/api/auth/google/exchange` | Public | One-time code → Sportico tokens |
+
 Coach onboarding — `CoachesController` (`/api/coaches`):
 
 | Method | Route | Role |

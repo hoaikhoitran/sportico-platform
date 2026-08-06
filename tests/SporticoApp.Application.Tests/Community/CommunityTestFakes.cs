@@ -1,4 +1,4 @@
-using SporticoApp.Application.DTOs.Community;
+﻿using SporticoApp.Application.DTOs.Community;
 using SporticoApp.Application.DTOs.Notifications;
 using SporticoApp.Application.DTOs.Users;
 using SporticoApp.Application.Interfaces.Repositories;
@@ -201,6 +201,7 @@ internal sealed class FakeCommunityUserRepository : IUserRepository
         => Task.FromResult(Users.TryGetValue(id, out var u) ? u : new User { Id = id, Status = UserStatuses.Active, FullName = "Auto User", Email = id + "@example.com" });
 
     public Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id) => throw new NotImplementedException();
+    public Task<User?> GetByIdWithRolesAsync(Guid id) => throw new NotImplementedException();
     public Task<User?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
     public Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedForAdminAsync(AdminUserFilterRequest filter) => throw new NotImplementedException();
     public Task<User?> GetByIdForAdminUpdateAsync(Guid id) => throw new NotImplementedException();

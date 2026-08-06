@@ -13,7 +13,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SporticoApp.Core", "src\Spo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SporticoApp.Infrastructure", "src\SporticoApp.Infrastructure\SporticoApp.Infrastructure.csproj", "{FD9D7E4C-EADE-4F91-B03A-42F21AF71D2B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SporticoApp.Shared", "SporticoApp.Shared\SporticoApp.Shared.csproj", "{87D97AF3-AEC7-C912-696D-6A2810C8FF6C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SporticoApp.Shared", "src\SporticoApp.Shared\SporticoApp.Shared.csproj", "{87D97AF3-AEC7-C912-696D-6A2810C8FF6C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject

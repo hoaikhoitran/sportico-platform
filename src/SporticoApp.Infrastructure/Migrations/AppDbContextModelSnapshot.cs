@@ -174,6 +174,54 @@ namespace SporticoApp.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.AuthExchangeCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("auth_exchange_codes_pkey");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex(new[] { "ExpiresAt" }, "idx_auth_exchange_codes_expires_at");
+
+                    b.HasIndex(new[] { "CodeHash" }, "uq_auth_exchange_codes_code_hash")
+                        .IsUnique();
+
+                    b.ToTable("auth_exchange_codes", null, t =>
+                        {
+                            t.HasComment("Short-lived single-use codes exchanged for Sportico tokens after external login");
+                        });
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.Booking", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3281,7 +3329,6 @@ namespace SporticoApp.Infrastructure.Migrations
                         .HasColumnName("full_name");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("password_hash");
 
@@ -3370,6 +3417,61 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.ToTable("user_blocks", null, t =>
                         {
                             t.HasComment("One user blocking another (one-directional)");
+                        });
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.UserExternalLogin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("LastLoginAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_login_at");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderEmail")
+                        .HasColumnType("citext")
+                        .HasColumnName("provider_email");
+
+                    b.Property<string>("ProviderSubject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("provider_subject");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("user_external_logins_pkey");
+
+                    b.HasIndex(new[] { "UserId" }, "idx_user_external_logins_user");
+
+                    b.HasIndex(new[] { "Provider", "ProviderSubject" }, "uq_user_external_logins_provider_subject")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "UserId", "Provider" }, "uq_user_external_logins_user_provider")
+                        .IsUnique();
+
+                    b.ToTable("user_external_logins", null, t =>
+                        {
+                            t.HasComment("Links a Sportico user to an identity at an external provider (Google)");
                         });
                 });
 
@@ -4055,6 +4157,18 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("User");
 
                     b.Navigation("VisitorSession");
+                });
+
+            modelBuilder.Entity("SporticoApp.Core.Entities.AuthExchangeCode", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.User", "User")
+                        .WithMany("AuthExchangeCodes")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_auth_exchange_codes_user");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("SporticoApp.Core.Entities.Booking", b =>
@@ -4794,6 +4908,18 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("Blocker");
                 });
 
+            modelBuilder.Entity("SporticoApp.Core.Entities.UserExternalLogin", b =>
+                {
+                    b.HasOne("SporticoApp.Core.Entities.User", "User")
+                        .WithMany("ExternalLogins")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_external_logins_user");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SporticoApp.Core.Entities.UserRole", b =>
                 {
                     b.HasOne("SporticoApp.Core.Entities.Role", "Role")
@@ -5030,6 +5156,8 @@ namespace SporticoApp.Infrastructure.Migrations
 
             modelBuilder.Entity("SporticoApp.Core.Entities.User", b =>
                 {
+                    b.Navigation("AuthExchangeCodes");
+
                     b.Navigation("BookingsAsLearner");
 
                     b.Navigation("ChatRoomsAsUser1");
@@ -5037,6 +5165,8 @@ namespace SporticoApp.Infrastructure.Migrations
                     b.Navigation("ChatRoomsAsUser2");
 
                     b.Navigation("CoachProfile");
+
+                    b.Navigation("ExternalLogins");
 
                     b.Navigation("FollowsAsFollower");
 

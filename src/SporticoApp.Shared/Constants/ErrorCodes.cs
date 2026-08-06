@@ -302,5 +302,19 @@ namespace SporticoApp.Shared.Constants
         public const string UserBlockCannotBlockSelf = "USER_BLOCK_CANNOT_BLOCK_SELF";
         public const string UserBlockAlreadyBlocked = "USER_BLOCK_ALREADY_BLOCKED";
         public const string UserBlockNotFound = "USER_BLOCK_NOT_FOUND";
+
+        // Google authentication
+        public const string GoogleInvalidToken = "AUTH_GOOGLE_INVALID_TOKEN";
+        public const string GoogleEmailNotVerified = "AUTH_GOOGLE_EMAIL_NOT_VERIFIED";
+        public const string GoogleAccountConflict = "AUTH_GOOGLE_ACCOUNT_CONFLICT";
+        public const string GoogleLoginFailed = "AUTH_GOOGLE_LOGIN_FAILED";
+        public const string GoogleConfigurationMissing = "AUTH_GOOGLE_CONFIGURATION_MISSING";
+        public const string GoogleExternalPrincipalInvalid = "AUTH_GOOGLE_EXTERNAL_PRINCIPAL_INVALID";
+        public const string GoogleExchangeCodeInvalid = "AUTH_GOOGLE_EXCHANGE_CODE_INVALID";
+        public const string GoogleExchangeCodeExpired = "AUTH_GOOGLE_EXCHANGE_CODE_EXPIRED";
+        public const string GoogleExchangeCodeAlreadyUsed = "AUTH_GOOGLE_EXCHANGE_CODE_ALREADY_USED";
+
+        /// <summary>A Google-only account has no local password to verify or change.</summary>
+        public const string PasswordNotSet = "AUTH_PASSWORD_NOT_SET";
     }
 }

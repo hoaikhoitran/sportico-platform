@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using SporticoApp.Application.DTOs.Bookings;
 using SporticoApp.Application.DTOs.Chat;
 using SporticoApp.Application.Interfaces.Repositories;
@@ -170,6 +170,7 @@ public class ChatServiceMessagesTests
                 ? User
                 : new User { Id = id, Status = UserStatuses.Active, FullName = "Test User", Email = "t@example.com" });
         public Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id) => throw new NotImplementedException();
+        public Task<User?> GetByIdWithRolesAsync(Guid id) => throw new NotImplementedException();
         public Task<User?> GetByIdForUpdateAsync(Guid id) => throw new NotImplementedException();
         public Task<(IReadOnlyList<User> Items, int TotalCount)> GetPagedForAdminAsync(SporticoApp.Application.DTOs.Users.AdminUserFilterRequest filter) => throw new NotImplementedException();
         public Task<User?> GetByIdForAdminUpdateAsync(Guid id) => throw new NotImplementedException();

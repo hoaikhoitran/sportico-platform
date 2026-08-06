@@ -7,12 +7,14 @@ Sportico follows **Clean Architecture**: business logic is isolated from framewo
 ```
 sportico-platform/
 ├── SporticoApp.Api.sln
-├── SporticoApp.Shared/                 # Cross-cutting building blocks
-└── src/
-    ├── SporticoApp.Api/                # HTTP entry point
-    ├── SporticoApp.Application/        # Use cases / services / interfaces / DTOs / validators
-    ├── SporticoApp.Core/               # Domain entities + enums
-    └── SporticoApp.Infrastructure/     # EF Core, repositories, JWT, email, PayOS
+├── src/
+│   ├── SporticoApp.Api/                # HTTP entry point
+│   ├── SporticoApp.Application/        # Use cases / services / interfaces / DTOs / validators
+│   ├── SporticoApp.Core/               # Domain entities + enums
+│   ├── SporticoApp.Infrastructure/     # EF Core, repositories, JWT, email, PayOS
+│   └── SporticoApp.Shared/             # Cross-cutting building blocks
+├── tests/
+└── docs/
 ```
 
 | Project | Responsibility | Examples |

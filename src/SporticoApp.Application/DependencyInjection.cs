@@ -52,6 +52,10 @@ namespace SporticoApp.Application
             services.AddScoped<ICommunityCommentService, CommunityCommentService>();
             services.AddScoped<ICommunityReportService, CommunityReportService>();
             services.AddScoped<IAdminCommunityService, AdminCommunityService>();
+            // Single source of truth for Sportico session tokens — used by password login,
+            // refresh-token, and both Google flows.
+            services.AddScoped<ITokenIssuer, TokenIssuer>();
+            services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 
             services.AddValidatorsFromAssemblyContaining
                 <RegisterCoachRequestValidator>();

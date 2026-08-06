@@ -121,6 +121,71 @@ PayOsPayout__ChecksumKey=...
 PayOsPayout__BaseUrl=https://api-merchant.payos.vn
 PayOsPayout__AutoPayoutEnabled=false
 PayOsPayout__PayoutCategory=salary
+
+# ── Google sign-in ────────────────────────────────────────────────────────────
+# GOOGLE_CLIENT_ID is public (the frontend needs it for Google Identity Services).
+# GOOGLE_CLIENT_SECRET is BACKEND-ONLY — never expose it to the browser or commit it.
+GOOGLE_CLIENT_ID=<google-oauth-client-id>.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=<google-oauth-client-secret>
+GOOGLE_CALLBACK_URL=https://sportico.click/api/auth/google/callback
+FRONTEND_URL=https://sportico-fe.vercel.app
 ```
+
+## The single local environment file
+
+**`<repository-root>/.env` is the only environment file this repository loads.**
+
+Both the API host (`Program.LoadEnvIfPresent`) and the EF design-time factory
+(`AppDbContextFactory`) call the same helper, `SporticoApp.Shared.Configuration.EnvironmentFileLoader`,
+which locates the repository root by walking up from the current working directory (then from
+`AppContext.BaseDirectory`) until it finds `SporticoApp.Api.sln`, and loads `<root>/.env`.
+
+This matters because `dotnet ef` runs with the **startup project's** folder as its working
+directory. The factory previously used the relative path `../SporticoApp.Api/.env`, so
+`dotnet ef database update` and `dotnet run` could read **different files** and therefore migrate a
+different database than the application talked to.
+
+> ⚠️ **Do not create `src/SporticoApp.Api/.env`.** It is no longer read. If the file exists, startup
+> and EF tooling print a warning that it was ignored — the warning never prints its contents.
+
+Startup prints only non-sensitive facts, never a key name or value:
+
+```
+[config] Environment file loaded from repository root.
+[ef] Database target: Supabase (session pooler)
+```
+
+### Supabase: direct endpoint vs. session pooler
+
+Supabase exposes two endpoints for the same database:
+
+| Endpoint | Host pattern | DNS | Use when |
+|---|---|---|---|
+| Direct | `db.<project-ref>.supabase.co` | **AAAA only (IPv6)** | Your network has working outbound IPv6 |
+| Session pooler | `aws-<n>-<region>.pooler.supabase.com` | A (IPv4) + AAAA | **IPv4-only networks** — most local machines and CI runners |
+
+If `dotnet ef database update` fails with
+`SocketException … hostname resolution` / `SocketErrorCode=NoData`, the cause is almost always that
+the direct endpoint is IPv6-only while the machine has no IPv6 route. Use the **session pooler**
+connection string from *Supabase Dashboard → Connect → Session pooler*; note it uses the username
+form `postgres.<project-ref>`. Put that string in `ConnectionStrings__Default` so runtime and EF
+tooling share one working endpoint.
+
+## Google sign-in configuration
+
+| Variable | Required for | Notes |
+|---|---|---|
+| `GOOGLE_CLIENT_ID` | Both flows | Public value. Must match the `aud` of every accepted Google ID token. |
+| `GOOGLE_CLIENT_SECRET` | Redirect flow only | **Secret.** Backend only. |
+| `GOOGLE_CALLBACK_URL` | Redirect flow only | Absolute URL; must be HTTPS outside Development (plain `http` is accepted only on loopback). Its *path* becomes the handler's `CallbackPath`, and it must exactly match the redirect URI registered in the Google Cloud console. |
+| `FRONTEND_URL` | Redirect flow only | Absolute base URL of the SPA. The post-login hop is always rebuilt as `{FRONTEND_URL}/auth/google/callback`, so a request can never redirect elsewhere. |
+
+The .NET-convention form is also supported and takes **priority** when set:
+`GoogleAuth__ClientId`, `GoogleAuth__ClientSecret`, `GoogleAuth__CallbackUrl`, `GoogleAuth__FrontendUrl`,
+`GoogleAuth__ExchangeCodeLifetimeSeconds` (default 90, clamped to 30–300).
+
+**Behaviour when Google configuration is absent:** the application still starts and every non-Google
+endpoint keeps working. The Google endpoints answer `503 AUTH_GOOGLE_CONFIGURATION_MISSING`, whose
+`details` array lists the missing configuration **key names only** — never a value.
 
 Provide a committed `.env.example` (the `.gitignore` allows it) with placeholders only.

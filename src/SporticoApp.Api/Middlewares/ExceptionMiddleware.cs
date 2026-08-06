@@ -72,6 +72,7 @@ public class ExceptionMiddleware
                 ErrorType.Forbidden => 403,
                 ErrorType.NotFound => 404,
                 ErrorType.Conflict => 409,
+                ErrorType.ServiceUnavailable => 503,
                 _ => 500
             };
 

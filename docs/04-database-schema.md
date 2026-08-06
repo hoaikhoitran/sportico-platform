@@ -103,6 +103,7 @@ Current migration history (chronological):
 | `20260711050207_AddConfigurablePlatformCommission` | `platform_settings` singleton (admin-editable commission, default 0%) |
 | `20260721062200_AddVisitorAndApiRequestAnalytics` | Self-hosted visitor/page-view/API-request analytics tables |
 | **`20260803160234_AddVoucherCommunityAndChatModules`** | **Voucher campaigns/redemptions + booking discount snapshot, community forum module, `chat_rooms` request/accept/reject extension, `user_blocks`** |
+| **`20260805174352_AddGoogleAuthentication`** | **`users.password_hash` made nullable, `user_external_logins`, `auth_exchange_codes`** |
 
 The booking-based marketplace schema is introduced by `20260527034926_AddBookingTrainingFlow`.
 
@@ -122,6 +123,24 @@ The booking-based marketplace schema is introduced by `20260527034926_AddBooking
 `bookings` gained `original_amount`, `discount_amount`, `voucher_campaign_id`, `voucher_code_snapshot`, `voucher_discount_type_snapshot`, `voucher_discount_value_snapshot`, `voucher_max_discount_amount_snapshot` — existing rows were safely backfilled (`original_amount = total_amount`, `discount_amount = 0`, no voucher) by the migration itself, verified against production with zero data loss. `chat_rooms` gained `status` (backfilled to `'active'` for all existing rows — no existing conversation was interrupted), `requested_by_user_id`, `requested_at`, `accepted_at`, `rejected_at`, `last_message_at`, `source_type`, `source_id`. `reports.target_type` gained three new allowed values: `community_post`, `community_comment`, `chat_message` (no schema change — `Report` already supported polymorphic targets for reviews).
 
 See [`docs/api/vouchers.md`](api/vouchers.md) and [`docs/api/community.md`](api/community.md) for the full API surface.
+
+### New tables (`20260805174352_AddGoogleAuthentication`)
+
+| Table | Purpose |
+|---|---|
+| `user_external_logins` | Links a Sportico user to an external identity. `UNIQUE(provider, provider_subject)` — one Google account maps to exactly one Sportico user; `UNIQUE(user_id, provider)` — one Sportico user holds at most one Google link. FK → `users` `ON DELETE CASCADE`. `provider_email` is `citext` audit metadata only. |
+| `auth_exchange_codes` | Short-lived single-use codes traded for Sportico tokens after a browser-redirect Google login. Only the SHA-256 hex `code_hash` is stored (`UNIQUE`), never the plaintext code, and never any access/refresh token. Indexed on `expires_at` for opportunistic cleanup. FK → `users` `ON DELETE CASCADE`. |
+
+`users.password_hash` became **nullable** so a Google-only account can exist without a local password.
+The migration only widens the column — no existing password hash, email, id, role or status was touched.
+Verified on a real PostgreSQL 16 both on a clean database and as an upgrade from
+`20260803160234_AddVoucherCommunityAndChatModules` with pre-existing rows present.
+
+The Google identity is keyed on the provider's immutable `sub` claim, never on email — a Google
+account can change its email address, but `sub` never changes.
+
+See [`docs/api/auth.md`](api/auth.md) and
+[`docs/frontend/GOOGLE_AUTH_FRONTEND_HANDOFF.md`](frontend/GOOGLE_AUTH_FRONTEND_HANDOFF.md).
 
 ### Apply migrations
 

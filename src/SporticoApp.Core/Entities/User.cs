@@ -12,7 +12,12 @@ public partial class User
 
     public string Email { get; set; } = null!;
 
-    public string PasswordHash { get; set; } = null!;
+    /// <summary>
+    /// Null for accounts created through an external provider (Google) that have never set a local
+    /// password. Never pass this to BCrypt without a null/empty check — see
+    /// <c>PasswordHelper.VerifyPassword</c>, which treats a null hash as "no match".
+    /// </summary>
+    public string? PasswordHash { get; set; }
 
     public string FullName { get; set; } = null!;
 
@@ -73,4 +78,8 @@ public partial class User
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
 
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+
+    public virtual ICollection<UserExternalLogin> ExternalLogins { get; set; } = new List<UserExternalLogin>();
+
+    public virtual ICollection<AuthExchangeCode> AuthExchangeCodes { get; set; } = new List<AuthExchangeCode>();
 }

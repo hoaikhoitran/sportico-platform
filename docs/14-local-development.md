@@ -73,6 +73,38 @@ Use `POST /api/auth/login`, copy `data.accessToken`, click **Authorize**, paste 
 
 A quick-start sequence for manual testing is in [15 — Testing and Smoke Test](15-testing-and-smoke-test.md).
 
+## Google sign-in locally (optional)
+
+Google endpoints are optional locally: without configuration the API starts normally and only
+`/api/auth/google*` answers `503 AUTH_GOOGLE_CONFIGURATION_MISSING`.
+
+To enable it, add to your `.env`:
+
+```env
+GOOGLE_CLIENT_ID=<client-id>.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=<client-secret>
+GOOGLE_CALLBACK_URL=http://localhost:5095/api/auth/google/callback
+FRONTEND_URL=http://localhost:3000
+```
+
+Then register `http://localhost:5095/api/auth/google/callback` as an authorized redirect URI in the
+Google Cloud console. Plain `http` is accepted **only on loopback**; any other host must use HTTPS.
+
+Verify the challenge without completing consent:
+
+```bash
+curl -i http://localhost:5095/api/auth/google
+# 302, Location: https://accounts.google.com/... with scope=openid email profile
+# and redirect_uri = your GOOGLE_CALLBACK_URL. No client_secret ever appears in this URL.
+```
+
+> **Only `<repository-root>/.env` is loaded.** The API host and the EF design-time factory share
+> one resolver (`SporticoApp.Shared.Configuration.EnvironmentFileLoader`) that finds the repository
+> root by its `SporticoApp.Api.sln` marker, so `dotnet run`, `dotnet ef migrations list` and
+> `dotnet ef database update` always read the same file no matter which directory you invoke them
+> from. A leftover `src/SporticoApp.Api/.env` is **ignored** (you will see a warning); delete it to
+> avoid confusion.
+
 ## Common Local Errors
 
 | Symptom | Cause | Fix |

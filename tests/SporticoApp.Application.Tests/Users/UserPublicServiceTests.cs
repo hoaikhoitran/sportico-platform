@@ -1,4 +1,4 @@
-using SporticoApp.Application.DTOs.Users;
+﻿using SporticoApp.Application.DTOs.Users;
 using SporticoApp.Application.Interfaces.Repositories;
 using SporticoApp.Application.Services;
 using SporticoApp.Core.Entities;
@@ -182,6 +182,8 @@ public class UserPublicServiceTests
         public FakeUserRepo(User? user) => _user = user;
 
         public Task<User?> GetByIdWithProfilesAndRolesAsync(Guid id)
+            => Task.FromResult(_user != null && _user.Id == id ? _user : null);
+        public Task<User?> GetByIdWithRolesAsync(Guid id)
             => Task.FromResult(_user != null && _user.Id == id ? _user : null);
 
         public Task<User?> GetByEmailAsync(string email) => throw new NotImplementedException();

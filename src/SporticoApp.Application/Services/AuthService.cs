@@ -34,6 +34,7 @@ namespace SporticoApp.Application.Services
         private readonly IUserRoleRepository _userRoleRepo;
         private readonly IJwtService _jwtService;
         private readonly IRefreshTokenService _refreshTokenService;
+        private readonly ITokenIssuer _tokenIssuer;
         private readonly IEmailService _emailService;
         private readonly IEmailTemplateService _emailTemplateService;
         private readonly IConfiguration _configuration;
@@ -49,6 +50,7 @@ namespace SporticoApp.Application.Services
             IUserRoleRepository userRoleRepo,
             IJwtService jwtService,
             IRefreshTokenService refreshTokenService,
+            ITokenIssuer tokenIssuer,
             IEmailService emailService,
             IEmailTemplateService emailTemplateService,
             IConfiguration configuration,
@@ -63,6 +65,7 @@ namespace SporticoApp.Application.Services
             _userRoleRepo = userRoleRepo;
             _jwtService = jwtService;
             _refreshTokenService = refreshTokenService;
+            _tokenIssuer = tokenIssuer;
             _emailService = emailService;
             _emailTemplateService = emailTemplateService;
             _configuration = configuration;
@@ -78,6 +81,10 @@ namespace SporticoApp.Application.Services
         {
             var normalizedEmail = request.Email.Trim().ToLower();
             var user = await _userRepo.GetByEmailWithRolesAsync(normalizedEmail);
+
+            // A Google-only account has PasswordHash == null. VerifyPassword returns false for a
+            // null/empty hash instead of throwing, so all three cases — unknown email, no local
+            // password, wrong password — collapse into the same generic error and never a 500.
             if (user == null || !PasswordHelper.VerifyPassword(
                 request.Password,
                 user.PasswordHash))
@@ -89,19 +96,7 @@ namespace SporticoApp.Application.Services
                 throw new UnauthorizedException(ErrorCodes.AccountNotActive, "Account is not active, check your email to active your account.");
             }
 
-            var accessToken = _jwtService.GenerateAccessToken(user);
-            var refreshToken = _refreshTokenService.GenerateRefreshToken();
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiresAt = DateTime.UtcNow.Add(
-                _refreshTokenService.GetRefreshTokenLifetime());
-
-            await _userRepo.UpdateAsync(user);
-            var response = new LoginResponse()
-            {
-                AccessToken = accessToken.Token,
-                RefreshToken = refreshToken,
-                ExpiresAt = accessToken.ExpiresAt
-            };
+            var response = await _tokenIssuer.IssueAsync(user);
 
             return Result<LoginResponse>.Success(response);
 
@@ -235,20 +230,15 @@ namespace SporticoApp.Application.Services
                 throw new UnauthorizedException(ErrorCodes.RefreshTokenExpired, "Refresh token expired");
             }
 
-            var accessToken = _jwtService.GenerateAccessToken(user);
-            var newRefreshToken = _refreshTokenService.GenerateRefreshToken();
-
-            user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiresAt = DateTime.UtcNow.Add(
-                _refreshTokenService.GetRefreshTokenLifetime());
-
-            await _userRepo.UpdateAsync(user);
+            // Same issuance path as password/Google login, so a refreshed session is
+            // indistinguishable from a freshly logged-in one.
+            var issued = await _tokenIssuer.IssueAsync(user);
 
             var response = new RefreshTokenResponse()
             {
-                AccessToken = accessToken.Token,
-                RefreshToken = newRefreshToken,
-                ExpiresAt = accessToken.ExpiresAt
+                AccessToken = issued.AccessToken,
+                RefreshToken = issued.RefreshToken,
+                ExpiresAt = issued.ExpiresAt
             };
 
             return Result<RefreshTokenResponse>.Success(response);
@@ -361,6 +351,16 @@ namespace SporticoApp.Application.Services
                 throw new NotFoundException(
                     ErrorCodes.UserNotFound,
                     "User not found");
+            }
+
+            // A Google-only account has no current password to verify. Say so explicitly instead of
+            // reporting "current password is incorrect" for a password that never existed — the
+            // user's route to a local password is forgot-password / reset-password.
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
+            {
+                throw new ConflictException(
+                    ErrorCodes.PasswordNotSet,
+                    "This account has no password set. Use the forgot-password flow to create one.");
             }
 
             if (!PasswordHelper.VerifyPassword(request.CurrentPassword, user.PasswordHash))

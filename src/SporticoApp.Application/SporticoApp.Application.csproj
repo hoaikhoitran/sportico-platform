@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\SporticoApp.Shared\SporticoApp.Shared.csproj" />
+    <ProjectReference Include="..\SporticoApp.Shared\SporticoApp.Shared.csproj" />
     <ProjectReference Include="..\SporticoApp.Core\SporticoApp.Core.csproj" />
   </ItemGroup>
 

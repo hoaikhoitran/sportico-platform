@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -20,7 +20,7 @@
     <ProjectReference Include="..\..\src\SporticoApp.Application\SporticoApp.Application.csproj" />
     <ProjectReference Include="..\..\src\SporticoApp.Core\SporticoApp.Core.csproj" />
     <ProjectReference Include="..\..\src\SporticoApp.Infrastructure\SporticoApp.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\SporticoApp.Shared\SporticoApp.Shared.csproj" />
+    <ProjectReference Include="..\..\src\SporticoApp.Shared\SporticoApp.Shared.csproj" />
   </ItemGroup>
 
 </Project>
